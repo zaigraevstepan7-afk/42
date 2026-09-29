@@ -199,14 +199,17 @@ fun ChatScreen(
 
     ModalNavigationDrawer(
         drawerState = drawerState,
+        scrimColor = Color.Black.copy(alpha = 0.45f),
         drawerContent = {
-            ModalDrawerSheet(drawerContainerColor = Sidebar, modifier = Modifier.fillMaxWidth(0.86f)) {
-                Column(Modifier.fillMaxHeight().statusBarsPadding().navigationBarsPadding().padding(horizontal = 16.dp)) {
-                    Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("ChatGPT", color = TextMain, fontSize = 28.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            ModalDrawerSheet(
+                drawerContainerColor = Sidebar,
+                drawerShape = RoundedCornerShape(0.dp),
+                modifier = Modifier.fillMaxWidth(0.84f),
+            ) {
+                Column(Modifier.fillMaxHeight().statusBarsPadding().navigationBarsPadding().padding(horizontal = 20.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 18.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("ChatGPT", color = TextMain, fontSize = 32.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                         CircleIcon(R.drawable.ds_search, "Поиск") {}
-                        Spacer(Modifier.width(8.dp))
-                        CircleIcon(R.drawable.ds_refresh, "Временный чат") { scope.launch { drawerState.close() } }
                     }
                     SideRow(R.drawable.ds_image, "Изображения")
                     SideRow(R.drawable.ds_library, "Библиотека")
@@ -217,22 +220,20 @@ fun ChatScreen(
                     Spacer(Modifier.padding(vertical = 8.dp).fillMaxWidth().height(0.5.dp).background(Hairline))
                     LazyColumn(Modifier.weight(1f)) {
                         items(conversations) { (id, title) ->
-                            val active = id == activeId
-                            Row(
-                                Modifier
+                            Text(
+                                title,
+                                color = TextMain,
+                                fontSize = 16.sp,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(if (active) Card else Color.Transparent)
                                     .clickable {
                                         scope.launch { drawerState.close() }
                                         onOpenChat(id)
                                     }
-                                    .padding(horizontal = 10.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text(title, color = if (active) TextMain else TextDim, fontSize = 16.sp, maxLines = 1, modifier = Modifier.weight(1f))
-                                if (active) Icon(painterResource(R.drawable.ds_pencil), contentDescription = null, tint = TextDim, modifier = Modifier.size(16.dp))
-                            }
+                                    .padding(vertical = 14.dp),
+                            )
                         }
                     }
                     Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -243,7 +244,7 @@ fun ChatScreen(
                             }.padding(horizontal = 16.dp, vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Icon(painterResource(R.drawable.ds_new_chat), contentDescription = null, tint = White, modifier = Modifier.size(18.dp))
+                            Icon(painterResource(R.drawable.ds_chat), contentDescription = null, tint = White, modifier = Modifier.size(18.dp))
                             Text("Чат", color = White, fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 8.dp))
                         }
                         Spacer(Modifier.weight(1f))
@@ -252,7 +253,12 @@ fun ChatScreen(
                             onSettings()
                         }
                         Spacer(Modifier.width(8.dp))
-                        CircleIcon(R.drawable.ds_voice, "Голос") {}
+                        Box(
+                            Modifier.size(44.dp).clip(CircleShape).background(Blue),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(painterResource(R.drawable.voice_button), contentDescription = "Голос", tint = White, modifier = Modifier.size(20.dp))
+                        }
                     }
                 }
             }
