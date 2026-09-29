@@ -287,7 +287,7 @@ fun ChatScreen(
     }
     ModalNavigationDrawer(
         drawerState = drawerState,
-        scrimColor = Color.Black.copy(alpha = 0.78f),
+        scrimColor = Color.Black.copy(alpha = 0.51f),
         drawerContent = {
             ModalDrawerSheet(
                 drawerContainerColor = Sidebar,
@@ -327,14 +327,14 @@ fun ChatScreen(
                     Row(Modifier.fillMaxWidth().padding(bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                         Row(
                             Modifier
-                                .height(51.dp)
-                                .clip(RoundedCornerShape(26.dp))
-                                .background(Blue)
+                                .height(48.dp)
+                                .clip(RoundedCornerShape(24.dp))
+                                .background(AccentGreen)
                                 .clickable {
                                     scope.launch { drawerState.close() }
                                     onNewChat()
                                 }
-                                .padding(horizontal = 22.dp),
+                                .padding(horizontal = 24.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Icon(painterResource(R.drawable.ds_chat), contentDescription = null, tint = White, modifier = Modifier.size(20.dp))
@@ -456,7 +456,7 @@ fun ChatScreen(
             }
             val stacked = files.isNotEmpty()
             val writing = draft.isNotBlank() || stacked
-            val actionColor = if (messages.isEmpty() && !writing) Blue else AccentGreen
+            val actionColor = AccentGreen
             val prompt = when {
                 temporary -> "Временный чат"
                 messages.isNotEmpty() -> "Ответить ChatGPT"
@@ -466,9 +466,9 @@ fun ChatScreen(
                 Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
-                    .padding(start = 12.dp, end = 12.dp, bottom = 10.dp)
+                    .padding(start = 36.dp, end = 36.dp, bottom = 12.dp)
                     .fillMaxWidth()
-                    .shadow(16.dp, RoundedCornerShape(28.dp), ambientColor = Color(0x33000000), spotColor = Color(0x24000000))
+                    .shadow(8.dp, RoundedCornerShape(28.dp), ambientColor = Color(0x22000000), spotColor = Color(0x14000000))
                     .clip(RoundedCornerShape(28.dp))
                     .border(1.dp, Color(0xFFE6E6E6), RoundedCornerShape(28.dp))
                     .background(Composer)
@@ -557,8 +557,8 @@ fun ChatScreen(
                     ) { slot ->
                         Box(
                             Modifier
-                                .padding(end = 6.dp)
-                                .size(34.dp)
+                                .padding(end = 8.dp)
+                                .size(32.dp)
                                 .clip(CircleShape)
                                 .background(actionColor)
                                 .clickable {
@@ -1115,7 +1115,7 @@ private fun CircleIcon(
 
 @Composable
 private fun SideRow(icon: Int, title: String) {
-    Row(Modifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(painterResource(icon), contentDescription = null, tint = TextMain, modifier = Modifier.size(22.dp))
         Text(title, color = TextMain, fontSize = 16.sp, modifier = Modifier.padding(start = 15.dp))
     }
