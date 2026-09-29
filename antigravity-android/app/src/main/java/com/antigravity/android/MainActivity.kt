@@ -29,6 +29,7 @@ import com.antigravity.android.net.CloudCodeClient
 import com.antigravity.android.net.agentTools
 import com.antigravity.android.ui.Canvas
 import com.antigravity.android.ui.ChatScreen
+import com.antigravity.android.ui.SettingsScreen
 import com.antigravity.android.ui.TextMain
 import com.antigravity.android.ui.UiMessage
 import com.antigravity.android.ui.WelcomeScreen
@@ -63,6 +64,7 @@ class MainActivity : ComponentActivity() {
     @Composable
     private fun RootApp() {
         var phase by remember { mutableStateOf("check") }
+        var settings by remember { mutableStateOf(false) }
         var session by remember { mutableStateOf(store.read()) }
         var error by remember { mutableStateOf<String?>(null) }
         var busy by remember { mutableStateOf(false) }
@@ -132,6 +134,7 @@ class MainActivity : ComponentActivity() {
                 )
             }
             else -> {
+                Box(Modifier.fillMaxSize()) {
                 val thread = chats.firstOrNull { it.id == currentId } ?: current()
                 ChatScreen(
                     email = session?.email.orEmpty(),
@@ -150,8 +153,10 @@ class MainActivity : ComponentActivity() {
                     onLogout = {
                         store.clear()
                         session = null
+                        settings = false
                         phase = "welcome"
                     },
+                    onSettings = { settings = true },
                     onSend = { text ->
                         val active = session ?: return@ChatScreen
                         if (text.isBlank() || busy) return@ChatScreen
@@ -219,6 +224,19 @@ class MainActivity : ComponentActivity() {
                         }
                     },
                 )
+                if (settings) {
+                    SettingsScreen(
+                        email = session?.email.orEmpty(),
+                        onBack = { settings = false },
+                        onLogout = {
+                            store.clear()
+                            session = null
+                            settings = false
+                            phase = "welcome"
+                        },
+                    )
+                }
+                }
             }
         }
     }
