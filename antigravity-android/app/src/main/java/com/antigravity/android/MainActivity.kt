@@ -307,14 +307,10 @@ class MainActivity : ComponentActivity() {
                         .put("contents", thread.contents)
                         .put(
                             "generationConfig",
-                            JSONObject()
-                                .put("maxOutputTokens", 65536)
-                                .put(
-                                    "thinkingConfig",
-                                    JSONObject()
-                                        .put("includeThoughts", true)
-                                        .put("thinkingBudget", 32768),
-                                ),
+                            JSONObject().put(
+                                "thinkingConfig",
+                                JSONObject().put("includeThoughts", true),
+                            ),
                         )
                         .put("tools", agentTools())
                         .put("sessionId", thread.sessionId)
