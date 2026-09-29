@@ -2,6 +2,7 @@ package com.antigravity.android.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,16 +14,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -32,118 +33,124 @@ import com.antigravity.android.R
 
 @Composable
 fun SettingsScreen(email: String, onBack: () -> Unit, onLogout: () -> Unit) {
-    var page by rememberSaveable { mutableStateOf("root") }
-    Column(Modifier.fillMaxSize().background(Canvas).statusBarsPadding().navigationBarsPadding()) {
-        Row(Modifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                painter = painterResource(R.drawable.ds_back),
-                contentDescription = "Назад",
-                tint = TextMain,
-                modifier = Modifier
-                    .size(48.dp)
-                    .clickable { if (page == "root") onBack() else page = "root" }
-                    .padding(12.dp),
-            )
-            Text(
-                titleFor(page),
-                color = TextMain,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.weight(1f),
-            )
-            Spacer(Modifier.size(48.dp))
+    val name = email.substringBefore("@").ifBlank { "Google" }
+    val initials = name.take(2).uppercase()
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(Canvas)
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp),
+    ) {
+        Box(
+            Modifier
+                .padding(top = 8.dp)
+                .size(40.dp)
+                .shadow(2.dp, CircleShape)
+                .clip(CircleShape)
+                .background(White)
+                .clickable(onClick = onBack),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(painterResource(R.drawable.ds_back), contentDescription = "Назад", tint = TextMain, modifier = Modifier.size(22.dp))
         }
-        Column(Modifier.verticalScroll(rememberScrollState())) {
-            when (page) {
-                "root" -> RootSettings(email) { page = it }
-                "account" -> AccountSettings(email, onLogout)
-                "voice" -> Body(
-                    "Разрешите доступ к микрофону в системных настройках, чтобы использовать Голос.",
-                )
-                "language" -> {
-                    CheckRow("Русский", true)
-                    CheckRow("Система (по умолчанию)", false)
+        Column(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(contentAlignment = Alignment.BottomEnd) {
+                Box(
+                    Modifier.size(72.dp).clip(CircleShape).background(Avatar),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(initials, color = White, fontSize = 22.sp, fontWeight = FontWeight.Medium)
                 }
-                "theme" -> CheckRow("Система (по умолчанию)", true)
-                "data" -> Body("Чтобы экспортировать свои данные, откройте ChatGPT в браузере. Там вы сможете запросить и скачать свои данные.")
-                "archive" -> Body("Архивированные чаты доступны в настройках.")
+                Box(
+                    Modifier
+                        .size(26.dp)
+                        .shadow(1.dp, CircleShape)
+                        .clip(CircleShape)
+                        .background(White),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(painterResource(R.drawable.ds_pencil), contentDescription = null, tint = TextMain, modifier = Modifier.size(14.dp))
+                }
             }
+            Text(name, color = TextMain, fontSize = 18.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 10.dp))
         }
+        SectionLabel("Мой ChatGPT")
+        Group {
+            SettingsRow(painterResource(R.drawable.ds_person), "Персонализация")
+            SettingsRow(painterResource(R.drawable.ds_book), "Память")
+            SettingsRow(painterResource(R.drawable.ds_plugin), "Плагины")
+        }
+        SectionLabel("Учетная запись")
+        Group {
+            SettingsRow(painterResource(R.drawable.ds_briefcase), "Рабочая область", "Личное")
+            SettingsRow(painterResource(R.drawable.ds_sparkle), "Изменить план", tint = Blue)
+            SettingsRow(painterResource(R.drawable.ds_sliders), "Использование и лимиты")
+            SettingsRow(painterResource(R.drawable.ds_heart), "Родительский контроль")
+            SettingsRow(painterResource(R.drawable.ds_mail), "Электронная почта", email.ifBlank { "—" })
+            SettingsRow(painterResource(R.drawable.ds_lock_person), "Проверка возраста")
+        }
+        Spacer(Modifier.height(12.dp))
+        Group {
+            SettingsRow(painterResource(R.drawable.ds_sun), "Внешний вид")
+            SettingsRow(painterResource(R.drawable.ds_palette), "Акцентный цвет", "Синий")
+        }
+        Spacer(Modifier.height(12.dp))
+        Group {
+            SettingsRow(painterResource(R.drawable.ds_gear), "Общие")
+            SettingsRow(painterResource(R.drawable.ds_bell), "Уведомления")
+            SettingsRow(painterResource(R.drawable.ds_voice), "Голос")
+            SettingsRow(painterResource(R.drawable.ds_shield), "Безопасность и благополучие")
+            SettingsRow(painterResource(R.drawable.ds_lock_person), "Безопасность и вход")
+            SettingsRow(painterResource(R.drawable.ds_remote), "Удаленное управление")
+            SettingsRow(painterResource(R.drawable.ds_storage), "Хранилище")
+            SettingsRow(painterResource(R.drawable.ds_shield), "Центр конфиденциальности")
+            SettingsRow(painterResource(R.drawable.ds_storage), "Управление данными")
+            SettingsRow(painterResource(R.drawable.ds_megaphone), "Управление рекламой")
+            SettingsRow(painterResource(R.drawable.ds_bug), "Сообщить об ошибке")
+            SettingsRow(painterResource(R.drawable.ds_info), "Информация")
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(Card)
+                .clickable(onClick = onLogout)
+                .padding(horizontal = 16.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(painterResource(R.drawable.ds_refresh), contentDescription = null, tint = Logout, modifier = Modifier.size(22.dp))
+            Text("Выйти", color = Logout, fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 14.dp))
+        }
+        Spacer(Modifier.height(24.dp))
     }
 }
 
 @Composable
-private fun RootSettings(email: String, open: (String) -> Unit) {
-    SettingsRow(painterResource(R.drawable.ds_person), email.ifBlank { "Google" }, null) { open("account") }
-    Hairline()
-    SettingsRow(painterResource(R.drawable.ds_sliders), "Настройки учетной записи", null) { open("account") }
-    Hairline()
-    SettingsRow(painterResource(R.drawable.ds_personalization), "Настройки голоса", null) { open("voice") }
-    Hairline()
-    SettingsRow(painterResource(R.drawable.ds_globe), "Язык приложения", "Русский") { open("language") }
-    Hairline()
-    SettingsRow(painterResource(R.drawable.ds_moon), "Система (по умолчанию)", null) { open("theme") }
-    Hairline()
-    SettingsRow(painterResource(R.drawable.ds_archive), "История и данные", null) { open("data") }
-    Hairline()
-    SettingsRow(painterResource(R.drawable.ds_archive), "Архивированные чаты", null) { open("archive") }
+private fun SectionLabel(text: String) {
+    Text(text, color = TextDim, fontSize = 14.sp, modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 8.dp))
 }
 
 @Composable
-private fun AccountSettings(email: String, onLogout: () -> Unit) {
-    Body(email.ifBlank { "Google" })
-    SettingsRow(painterResource(R.drawable.ds_person), "Выйти из системы", null, onLogout)
-    Hairline()
-    SettingsRow(painterResource(R.drawable.ds_person), "Выйти на всех устройствах", null, onLogout)
+private fun Group(content: @Composable () -> Unit) {
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Card)) {
+        content()
+    }
 }
 
 @Composable
-private fun SettingsRow(icon: Painter, title: String, value: String?, onClick: () -> Unit) {
+private fun SettingsRow(icon: Painter, title: String, value: String? = null, tint: androidx.compose.ui.graphics.Color = TextMain) {
     Row(
-        Modifier.fillMaxWidth().height(52.dp).clickable(onClick = onClick).padding(horizontal = 16.dp),
+        Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(icon, contentDescription = null, tint = TextMain, modifier = Modifier.size(22.dp))
-        Text(title, color = TextMain, fontSize = 16.sp, modifier = Modifier.weight(1f).padding(horizontal = 14.dp))
-        if (value != null) {
-            Text(value, color = TextDim, fontSize = 16.sp)
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
+        Column(Modifier.weight(1f).padding(start = 14.dp)) {
+            Text(title, color = tint, fontSize = 16.sp)
+            if (value != null) Text(value, color = if (title == "Акцентный цвет") Blue else TextDim, fontSize = 13.sp)
         }
-        Icon(
-            painterResource(R.drawable.ds_chevron_right),
-            contentDescription = null,
-            tint = TextDim,
-            modifier = Modifier.padding(start = 8.dp).size(16.dp),
-        )
     }
-}
-
-@Composable
-private fun CheckRow(title: String, selected: Boolean) {
-    Row(
-        Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 20.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(title, color = TextMain, fontSize = 16.sp, modifier = Modifier.weight(1f))
-        if (selected) Text("✓", color = TextMain, fontSize = 16.sp)
-    }
-}
-
-@Composable
-private fun Body(text: String) {
-    Text(text, color = TextDim, fontSize = 16.sp, lineHeight = 22.sp, modifier = Modifier.padding(20.dp))
-}
-
-@Composable
-private fun Hairline() {
-    Spacer(Modifier.padding(start = 52.dp).fillMaxWidth().height(0.5.dp).background(Hairline))
-}
-
-private fun titleFor(page: String): String = when (page) {
-    "account" -> "Настройки учетной записи"
-    "voice" -> "Настройки голоса"
-    "language" -> "Язык приложения"
-    "theme" -> "Система (по умолчанию)"
-    "data" -> "История и данные"
-    "archive" -> "Архивированные чаты"
-    else -> "Настройки"
 }

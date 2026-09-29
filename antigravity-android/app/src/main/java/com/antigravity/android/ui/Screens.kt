@@ -66,6 +66,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.Text
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.res.painterResource
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.layout.PaddingValues
@@ -127,6 +128,7 @@ fun WelcomeScreen(busy: Boolean, error: String?, onGoogle: () -> Unit) {
                 Modifier
                     .fillMaxWidth()
                     .heightIn(min = 48.dp)
+                    .shadow(1.dp, RoundedCornerShape(24.dp))
                     .clip(RoundedCornerShape(24.dp))
                     .background(White)
                     .clickable(enabled = !busy, onClick = onGoogle)
@@ -174,6 +176,7 @@ fun ChatScreen(
     val scope = rememberCoroutineScope()
     var draft by remember { mutableStateOf("") }
     var sheet by remember { mutableStateOf(false) }
+    var temporary by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val hazeState = rememberHazeState()
     val barBlur = HazeStyle(
@@ -189,55 +192,53 @@ fun ChatScreen(
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
-            ModalDrawerSheet(drawerContainerColor = Sidebar, modifier = Modifier.width(300.dp)) {
-                Column(Modifier.fillMaxHeight().padding(top = 12.dp)) {
-                    DrawerRow("Новый чат") {
-                        scope.launch { drawerState.close() }
-                        onNewChat()
+            ModalDrawerSheet(drawerContainerColor = Sidebar, modifier = Modifier.fillMaxWidth(0.86f)) {
+                Column(Modifier.fillMaxHeight().statusBarsPadding().navigationBarsPadding().padding(horizontal = 16.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("ChatGPT", color = TextMain, fontSize = 28.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                        CircleIcon(R.drawable.ds_search, "Поиск") {}
+                        Spacer(Modifier.width(8.dp))
+                        CircleIcon(R.drawable.ds_refresh, "Временный чат") { scope.launch { drawerState.close() } }
                     }
-                    Text(
-                        "Чаты",
-                        color = TextFaint,
-                        fontSize = 13.sp,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
-                    )
+                    SideRow(R.drawable.ds_image, "Изображения")
+                    SideRow(R.drawable.ds_library, "Библиотека")
+                    SideRow(R.drawable.ds_folder, "Проекты")
+                    SideRow(R.drawable.ds_remote, "Remote")
+                    SideRow(R.drawable.ds_clock, "Запланировано")
+                    SideRow(R.drawable.ds_plugin, "Плагины")
+                    Spacer(Modifier.padding(vertical = 8.dp).fillMaxWidth().height(0.5.dp).background(Hairline))
                     LazyColumn(Modifier.weight(1f)) {
                         items(conversations) { (id, title) ->
-                            DrawerRow(title) {
-                                scope.launch { drawerState.close() }
-                                onOpenChat(id)
-                            }
+                            Text(
+                                title,
+                                color = TextMain,
+                                fontSize = 16.sp,
+                                maxLines = 1,
+                                modifier = Modifier.fillMaxWidth().clickable {
+                                    scope.launch { drawerState.close() }
+                                    onOpenChat(id)
+                                }.padding(vertical = 12.dp),
+                            )
                         }
                     }
-                    Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.ds_person),
-                            contentDescription = null,
-                            tint = TextMain,
-                            modifier = Modifier.padding(8.dp).size(22.dp),
-                        )
-                        Text(
-                            email.ifBlank { "Google" },
-                            color = TextMain,
-                            fontSize = 16.sp,
-                            maxLines = 1,
-                            modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
-                        )
-                        Icon(
-                            painter = painterResource(R.drawable.ds_gear),
-                            contentDescription = "Настройки",
-                            tint = TextMain,
-                            modifier = Modifier
-                                .size(44.dp)
-                                .clickable {
-                                    scope.launch { drawerState.close() }
-                                    onSettings()
-                                }
-                                .padding(10.dp),
-                        )
+                    Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            Modifier.clip(RoundedCornerShape(22.dp)).background(Blue).clickable {
+                                scope.launch { drawerState.close() }
+                                onNewChat()
+                            }.padding(horizontal = 16.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(painterResource(R.drawable.ds_new_chat), contentDescription = null, tint = White, modifier = Modifier.size(18.dp))
+                            Text("Чат", color = White, fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 8.dp))
+                        }
+                        Spacer(Modifier.weight(1f))
+                        CircleIcon(R.drawable.ds_gear, "Настройки") {
+                            scope.launch { drawerState.close() }
+                            onSettings()
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        CircleIcon(R.drawable.ds_voice, "Голос") {}
                     }
                 }
             }
@@ -248,7 +249,23 @@ fun ChatScreen(
         Box(Modifier.fillMaxSize().background(Canvas).imePadding()) {
             Box(Modifier.fillMaxSize().hazeSource(hazeState)) {
                 if (messages.isEmpty()) {
-                    Blossom(Modifier.align(Alignment.Center), size = 64.dp)
+                    if (temporary) {
+                        Column(Modifier.align(Alignment.Center).padding(horizontal = 32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("Временный чат", color = TextMain, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+                            Text("Этот чат не появится в истории.", color = TextDim, fontSize = 16.sp, modifier = Modifier.padding(top = 6.dp))
+                            Text("Узнать больше", color = TextDim, fontSize = 16.sp, textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline, modifier = Modifier.padding(top = 4.dp))
+                            Row(Modifier.padding(top = 22.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Text("С персонализацией", color = TextMain, fontSize = 16.sp)
+                                Icon(painterResource(R.drawable.ds_chevron), contentDescription = null, tint = TextMain, modifier = Modifier.padding(start = 4.dp).size(16.dp))
+                            }
+                        }
+                    } else {
+                        Column(Modifier.align(Alignment.BottomCenter).padding(start = 20.dp, end = 20.dp, bottom = bottomInset + 84.dp)) {
+                            SuggestRow(R.drawable.ds_image_spark, "Создать изображение") { draft = "Создать изображение " }
+                            SuggestRow(R.drawable.ds_pencil, "Напиши или отредактируй") { draft = "Напиши или отредактируй " }
+                            SuggestRow(R.drawable.ds_globe2, "Искать в интернете") { draft = "Искать в интернете " }
+                        }
+                    }
                 } else {
                     LazyColumn(
                         state = listState,
@@ -280,43 +297,26 @@ fun ChatScreen(
                 Modifier
                     .align(Alignment.TopCenter)
                     .fillMaxWidth()
-                    .hazeEffect(hazeState, barBlur)
                     .statusBarsPadding()
-                    .height(52.dp)
-                    .padding(horizontal = 4.dp),
+                    .height(56.dp)
+                    .padding(horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(
-                    painter = painterResource(R.drawable.ds_sidebar),
-                    contentDescription = "Меню",
-                    tint = TextMain,
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clickable { scope.launch { drawerState.open() } }
-                        .padding(12.dp),
-                )
+                CircleIcon(R.drawable.ds_sidebar, "Меню") { scope.launch { drawerState.open() } }
+                Spacer(Modifier.width(8.dp))
                 Row(
-                    Modifier.weight(1f).clickable { sheet = true },
+                    Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(BlueSoft)
+                        .clickable { sheet = true }
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center,
                 ) {
-                    Text("ChatGPT", color = TextMain, fontSize = 16.sp, fontWeight = FontWeight.Medium)
-                    Icon(
-                        painter = painterResource(R.drawable.ds_chevron),
-                        contentDescription = null,
-                        tint = TextDim,
-                        modifier = Modifier.padding(start = 4.dp).size(12.dp),
-                    )
+                    Icon(painterResource(R.drawable.ds_sparkle), contentDescription = null, tint = Blue, modifier = Modifier.size(16.dp))
+                    Text("Подключить", color = Blue, fontSize = 15.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 6.dp))
                 }
-                Icon(
-                    painter = painterResource(R.drawable.ds_new_chat),
-                    contentDescription = "Новый чат",
-                    tint = TextMain,
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clickable(onClick = onNewChat)
-                        .padding(12.dp),
-                )
+                Spacer(Modifier.weight(1f))
+                CircleIcon(R.drawable.ds_refresh, "Временный чат") { temporary = !temporary }
             }
             Row(
                 Modifier
@@ -326,6 +326,7 @@ fun ChatScreen(
                     .hazeEffect(hazeState, barBlur)
                     .fillMaxWidth()
                     .heightIn(min = 52.dp)
+                    .shadow(1.dp, RoundedCornerShape(26.dp))
                     .clip(RoundedCornerShape(26.dp))
                     .background(Composer)
                     .padding(start = 4.dp, end = 6.dp),
@@ -345,16 +346,16 @@ fun ChatScreen(
                     cursorBrush = SolidColor(White),
                     maxLines = 5,
                     decorationBox = { inner ->
-                        if (draft.isEmpty()) Text("Спросите что угодно", color = TextFaint, fontSize = 16.sp)
+                        if (draft.isEmpty()) Text(if (temporary) "Временный чат" else "Спросить ChatGPT", color = TextFaint, fontSize = 16.sp)
                         inner()
                     },
                 )
                 AnimatedContent(
-                    targetState = draft.isBlank(),
+                    targetState = draft.isBlank() && !temporary,
                     transitionSpec = { fadeIn(tween(150)) togetherWith fadeOut(tween(150)) },
                     label = "composer-trailing",
                 ) { empty ->
-                    if (empty) {
+                    if (empty && !temporary) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 painter = painterResource(R.drawable.mic_filled),
@@ -362,20 +363,20 @@ fun ChatScreen(
                                 tint = TextMain,
                                 modifier = Modifier.padding(horizontal = 6.dp).size(22.dp),
                             )
-                            Icon(
-                                painter = painterResource(R.drawable.voice_button),
-                                contentDescription = null,
-                                tint = TextMain,
-                                modifier = Modifier.padding(start = 2.dp, end = 10.dp).size(22.dp),
-                            )
+                            Box(
+                                Modifier.padding(end = 4.dp).size(36.dp).clip(CircleShape).background(Blue),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(painterResource(R.drawable.ds_voice), contentDescription = null, tint = White, modifier = Modifier.size(18.dp))
+                            }
                         }
                     } else {
                         Box(
                             Modifier
                                 .padding(6.dp)
                                 .size(32.dp)
-                                .clip(CircleShape)
-                                .background(White)
+                            .clip(CircleShape)
+                            .background(if (draft.isBlank()) Card else Blue)
                                 .clickable(enabled = !busy) {
                                     val text = draft.trim()
                                     draft = ""
@@ -386,7 +387,7 @@ fun ChatScreen(
                             Icon(
                                 painter = painterResource(R.drawable.ds_arrow_up),
                                 contentDescription = null,
-                                tint = Black,
+                                tint = if (draft.isBlank()) TextDim else White,
                                 modifier = Modifier.size(18.dp),
                             )
                         }
@@ -481,7 +482,7 @@ private fun UserBubble(text: String) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.End) {
             Text(
                 text,
-                color = White,
+                color = TextMain,
                 fontSize = 16.sp,
                 lineHeight = 22.sp,
                 modifier = Modifier
@@ -495,16 +496,37 @@ private fun UserBubble(text: String) {
 }
 
 @Composable
-private fun DrawerRow(title: String, onClick: () -> Unit) {
-    Text(
-        title,
-        color = TextMain,
-        fontSize = 16.sp,
-        maxLines = 1,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 12.dp),
-    )
+private fun CircleIcon(icon: Int, label: String, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .size(40.dp)
+            .shadow(2.dp, CircleShape)
+            .clip(CircleShape)
+            .background(White)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(painterResource(icon), contentDescription = label, tint = TextMain, modifier = Modifier.size(20.dp))
+    }
 }
+
+@Composable
+private fun SideRow(icon: Int, title: String) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(painterResource(icon), contentDescription = null, tint = TextMain, modifier = Modifier.size(22.dp))
+        Text(title, color = TextMain, fontSize = 16.sp, modifier = Modifier.padding(start = 14.dp))
+    }
+}
+
+@Composable
+private fun SuggestRow(icon: Int, title: String, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(painterResource(icon), contentDescription = null, tint = TextDim, modifier = Modifier.size(22.dp))
+        Text(title, color = TextMain, fontSize = 16.sp, modifier = Modifier.padding(start = 14.dp))
+    }
+}
+
 
