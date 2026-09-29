@@ -18,6 +18,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -96,6 +97,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
@@ -479,20 +481,23 @@ fun ChatScreen(
                 messages.isNotEmpty() -> "Ответить ChatGPT"
                 else -> "Спросить ChatGPT"
             }
-            val grown = stacked || composerLines > 1 && draft.isNotBlank()
-            val lines = if (draft.isBlank()) 1 else composerLines.coerceIn(1, 8)
+            val wide = composerFocus || draft.isNotBlank() || stacked
+            val sidePad by animateDpAsState(if (wide) 12.dp else 44.dp, tween(220, easing = FastOutSlowInEasing), label = "composer-width")
+            val textMax = (LocalConfiguration.current.screenHeightDp / 3).dp - 56.dp
+            val lines = if (draft.isBlank()) 1 else composerLines.coerceAtLeast(1)
             Column(
                 Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
-                    .padding(start = 44.dp, end = 44.dp, bottom = 10.dp)
+                    .padding(start = sidePad, end = sidePad, bottom = 10.dp)
                     .fillMaxWidth()
-                    .shadow(8.dp, RoundedCornerShape(if (grown) 24.dp else 28.dp), ambientColor = Color(0x22000000), spotColor = Color(0x14000000))
-                    .clip(RoundedCornerShape(if (grown) 24.dp else 28.dp))
-                    .border(1.dp, Color(0xFFE6E6E6), RoundedCornerShape(if (grown) 24.dp else 28.dp))
+                    .shadow(8.dp, RoundedCornerShape(if (lines > 1 || stacked) 24.dp else 28.dp), ambientColor = Color(0x22000000), spotColor = Color(0x14000000))
+                    .clip(RoundedCornerShape(if (lines > 1 || stacked) 24.dp else 28.dp))
+                    .border(1.dp, Color(0xFFE6E6E6), RoundedCornerShape(if (lines > 1 || stacked) 24.dp else 28.dp))
                     .background(Composer)
                     .animateContentSize(tween(220, easing = FastOutSlowInEasing))
-                    .padding(top = if (stacked || grown) 8.dp else 0.dp),
+                    .padding(top = if (stacked || lines > 1) 8.dp else 0.dp)
+                    .heightIn(max = (LocalConfiguration.current.screenHeightDp / 3).dp),
             ) {
                 if (stacked) {
                     Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 8.dp)) {
@@ -535,11 +540,11 @@ fun ChatScreen(
                         modifier = Modifier
                             .weight(1f)
                             .padding(bottom = if (lines > 1) 12.dp else 0.dp, top = if (lines > 1) 6.dp else 0.dp)
-                            .heightIn(min = (lines * 22).dp, max = 176.dp)
+                            .heightIn(min = (lines * 22).dp, max = textMax)
                             .onFocusChanged { composerFocus = it.isFocused },
                         textStyle = TextStyle(color = TextMain, fontSize = 17.sp, lineHeight = 22.sp),
                         cursorBrush = SolidColor(AccentGreen),
-                        maxLines = 8,
+                        maxLines = Int.MAX_VALUE,
                         onTextLayout = { composerLines = it.lineCount.coerceAtLeast(1) },
                         decorationBox = { inner ->
                             if (draft.isEmpty()) {
