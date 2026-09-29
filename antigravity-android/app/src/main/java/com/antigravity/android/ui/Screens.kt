@@ -294,7 +294,7 @@ fun ChatScreen(
                 drawerShape = RoundedCornerShape(0.dp),
                 modifier = Modifier.fillMaxWidth(0.80f),
             ) {
-                Column(Modifier.fillMaxHeight().statusBarsPadding().navigationBarsPadding().padding(horizontal = 35.dp)) {
+                Column(Modifier.fillMaxHeight().statusBarsPadding().navigationBarsPadding().padding(horizontal = 32.dp)) {
                     Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 18.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text("ChatGPT", color = TextMain, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                         CircleIcon(R.drawable.ds_search, "Поиск", size = 44.dp, iconSize = 27.dp) {}
@@ -366,7 +366,7 @@ fun ChatScreen(
                             }
                         }
                     } else if (draft.isBlank()) {
-                        Column(Modifier.align(Alignment.BottomCenter).padding(start = 22.dp, end = 22.dp, bottom = bottomInset + 74.dp)) {
+                        Column(Modifier.align(Alignment.BottomCenter).padding(start = 44.dp, end = 44.dp, bottom = bottomInset + 70.dp)) {
                             SuggestRow(R.drawable.ds_image_spark, "Создать изображение") { draft = "Создать изображение " }
                             SuggestRow(R.drawable.ds_pencil, "Напиши или отредактируй") { draft = "Напиши или отредактируй " }
                             SuggestRow(R.drawable.ds_globe2, "Искать в интернете") { draft = "Искать в интернете " }
@@ -443,7 +443,7 @@ fun ChatScreen(
                     Modifier
                         .align(Alignment.BottomCenter)
                         .navigationBarsPadding()
-                        .padding(bottom = 78.dp)
+                        .padding(bottom = 72.dp)
                         .size(44.dp)
                         .shadow(6.dp, CircleShape)
                         .clip(CircleShape)
@@ -466,7 +466,7 @@ fun ChatScreen(
                 Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
-                    .padding(start = 36.dp, end = 36.dp, bottom = 12.dp)
+                    .padding(start = 44.dp, end = 44.dp, bottom = 10.dp)
                     .fillMaxWidth()
                     .shadow(8.dp, RoundedCornerShape(28.dp), ambientColor = Color(0x22000000), spotColor = Color(0x14000000))
                     .clip(RoundedCornerShape(28.dp))
@@ -513,7 +513,7 @@ fun ChatScreen(
                         },
                     )
                 }
-                Row(Modifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         painterResource(R.drawable.ds_plus),
                         contentDescription = "Добавить",
