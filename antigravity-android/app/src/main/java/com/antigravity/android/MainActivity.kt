@@ -308,9 +308,9 @@ class MainActivity : ComponentActivity() {
                             if (delta.searchQueries.isNotEmpty()) {
                                 patchAssistant(thread) {
                                     it.copy(
-                                        searchLabel = searchQueryLabel(delta.searchQueries.last()),
+                                        searchSteps = searchSteps(delta.searchQueries),
                                         phase = if (shownText.get()) it.phase else ReplyPhase.Searching,
-                                        thinking = !shownText.get(),
+                                        thinking = false,
                                     )
                                 }
                             }
@@ -332,6 +332,7 @@ class MainActivity : ComponentActivity() {
                                             thinking = false,
                                             citations = foundCitations.get(),
                                             searchLabel = null,
+                                            searchSteps = emptyList(),
                                         )
                                     }
                                 }
@@ -348,7 +349,11 @@ class MainActivity : ComponentActivity() {
                         if (call.callName == "web_search" && query.isNotBlank()) {
                             onMain {
                                 patchAssistant(thread) {
-                                    it.copy(phase = ReplyPhase.Searching, thinking = true, searchLabel = searchQueryLabel(query))
+                                    it.copy(
+                                        phase = ReplyPhase.Searching,
+                                        thinking = false,
+                                        searchSteps = searchSteps(listOf(query)),
+                                    )
                                 }
                             }
                         }
@@ -464,9 +469,13 @@ private fun rewindAfterUser(thread: ChatThread) {
     }
 }
 
-private fun searchQueryLabel(query: String): String {
-    val clipped = if (query.length > 56) query.take(56) + "…" else query
-    return "Поиск по запросу «$clipped»"
+private fun searchSteps(queries: List<String>): List<String> {
+    val lines = ArrayList<String>()
+    lines.add("Поиск в интернете...")
+    queries.map { it.trim() }.filter { it.isNotEmpty() }.distinct().forEach { query ->
+        lines.add("Поиск по запросу «$query»")
+    }
+    return lines
 }
 
 private fun onMain(block: () -> Unit) {
@@ -549,7 +558,8 @@ private fun systemInstruction(): JSONObject {
     val text = """
         Ты работаешь внутри телефона с root. Отвечай на языке пользователя.
         Если во вложении есть изображение, ты его видишь. Отвечай по содержимому картинки, не пиши что не можешь смотреть скриншоты.
-        Для фактов, новостей, цен, дат и всего актуального сначала вызови web_search, затем при необходимости read_url.
+        Для фактов, новостей, цен, дат и всего актуального сначала вызови web_search.
+        В query передавай короткий поисковый запрос по смыслу, на языке источников, а не дословную реплику пользователя.
         Не выдумывай источники. В ответе упоминай названия сайтов из результатов поиска.
         Файлы, команды и загрузки делай инструментами list_dir, read_file, write_file, exec, download.
         Пути абсолютные. Не выдумывай вывод команд.

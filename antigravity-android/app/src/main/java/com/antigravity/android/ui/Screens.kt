@@ -128,6 +128,7 @@ data class UiMessage(
     val sending: Boolean = false,
     val phase: ReplyPhase = ReplyPhase.Done,
     val searchLabel: String? = null,
+    val searchSteps: List<String> = emptyList(),
     val thinking: Boolean = false,
     val thought: String = "",
     val thoughtSeconds: Int = 0,
@@ -527,14 +528,12 @@ fun ChatScreen(
                             inner()
                         },
                     )
-                    if (!busy) {
-                        Icon(
-                            painterResource(R.drawable.ds_mic),
-                            contentDescription = "Голос в текст",
-                            tint = TextMain,
-                            modifier = Modifier.padding(end = 8.dp, bottom = 13.dp).size(22.dp).clickable { dictate() },
-                        )
-                    }
+                    Icon(
+                        painterResource(R.drawable.ds_mic),
+                        contentDescription = "Голос в текст",
+                        tint = TextMain,
+                        modifier = Modifier.padding(end = 8.dp, bottom = 13.dp).size(22.dp).clickable(enabled = !busy) { dictate() },
+                    )
                     AnimatedContent(
                         targetState = when {
                             busy -> "stop"
@@ -699,12 +698,12 @@ private fun AssistantTurn(
     onSources: () -> Unit,
 ) {
     val live = message.phase != ReplyPhase.Done
+    val searching = message.text.isEmpty() && message.searchSteps.isNotEmpty()
     Column(Modifier.fillMaxWidth().animateContentSize(tween(180))) {
-        if (live || message.thought.isNotBlank() || message.thoughtSeconds > 0) {
+        if (searching) {
+            SearchRows(message.searchSteps)
+        } else if (live || message.thought.isNotBlank() || message.thoughtSeconds > 0) {
             ThinkingBlock(message)
-        }
-        AnimatedVisibility(visible = live && !message.searchLabel.isNullOrBlank(), enter = fadeIn(tween(220)), exit = fadeOut(tween(220))) {
-            SearchStatus(message.searchLabel.orEmpty())
         }
         if (message.text.isNotEmpty()) {
             AnswerMarkdown(message.text, message.citations, streaming = message.phase == ReplyPhase.Streaming)
@@ -716,21 +715,20 @@ private fun AssistantTurn(
 }
 
 @Composable
-private fun SearchStatus(label: String) {
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(painterResource(R.drawable.ds_globe2), contentDescription = null, tint = TextDim, modifier = Modifier.size(16.dp))
-        Text(
-            label,
-            color = TextDim,
-            fontSize = 14.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f).padding(start = 8.dp, end = 10.dp),
-        )
-        CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 1.6.dp, color = TextDim, trackColor = Color.Transparent)
+private fun SearchRows(lines: List<String>) {
+    Column(Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
+        lines.forEach { line ->
+            Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.Top) {
+                Icon(painterResource(R.drawable.ds_globe2), contentDescription = null, tint = TextDim, modifier = Modifier.padding(top = 2.dp).size(18.dp))
+                Text(
+                    line,
+                    color = TextDim,
+                    fontSize = 16.sp,
+                    lineHeight = 22.sp,
+                    modifier = Modifier.padding(start = 10.dp).weight(1f),
+                )
+            }
+        }
     }
 }
 
