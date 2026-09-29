@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.provider.OpenableColumns
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -106,8 +107,12 @@ import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.UUID
+
+data class PendingFile(val name: String, val mime: String, val bytes: ByteArray)
 
 enum class ReplyPhase { Waiting, Searching, Streaming, Done }
 
@@ -208,7 +213,7 @@ fun ChatScreen(
     onModel: (String) -> Unit,
     onNewChat: () -> Unit,
     onOpenChat: (String) -> Unit,
-    onSend: (String) -> Unit,
+    onSend: (String, List<PendingFile>, Boolean) -> Unit,
     onStop: () -> Unit,
     onRegenerate: () -> Unit,
     onLogout: () -> Unit,
@@ -227,6 +232,32 @@ fun ChatScreen(
     }
     val dictate = {
         micPermission.launch(Manifest.permission.RECORD_AUDIO)
+    }
+    var files by remember { mutableStateOf(listOf<PendingFile>()) }
+    var deepThink by remember { mutableStateOf(false) }
+    var attachMenu by remember { mutableStateOf(false) }
+    val takePhoto = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
+        if (bitmap != null) {
+            val stream = java.io.ByteArrayOutputStream()
+            bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, stream)
+            files = files + PendingFile("photo.jpg", "image/jpeg", stream.toByteArray())
+        }
+        attachMenu = false
+    }
+    val cameraPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) takePhoto.launch(null)
+    }
+    val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) scope.launch {
+            readPending(context, uri, "photo")?.let { files = files + it }
+        }
+        attachMenu = false
+    }
+    val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) scope.launch {
+            readPending(context, uri, "file")?.let { files = files + it }
+        }
+        attachMenu = false
     }
     var sheet by remember { mutableStateOf(false) }
     var connect by remember { mutableStateOf(false) }
@@ -324,7 +355,7 @@ fun ChatScreen(
                             }
                         }
                     } else if (draft.isBlank()) {
-                        Column(Modifier.align(Alignment.BottomCenter).padding(start = 22.dp, end = 22.dp, bottom = bottomInset + 108.dp)) {
+                        Column(Modifier.align(Alignment.BottomCenter).padding(start = 22.dp, end = 22.dp, bottom = bottomInset + 74.dp)) {
                             SuggestRow(R.drawable.ds_image_spark, "Создать изображение") { draft = "Создать изображение " }
                             SuggestRow(R.drawable.ds_pencil, "Напиши или отредактируй") { draft = "Напиши или отредактируй " }
                             SuggestRow(R.drawable.ds_globe2, "Искать в интернете") { draft = "Искать в интернете " }
@@ -378,7 +409,7 @@ fun ChatScreen(
                         .padding(horizontal = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(painterResource(R.drawable.ds_sparkle), contentDescription = null, tint = Blue, modifier = Modifier.size(16.dp))
+                    Icon(painterResource(R.drawable.ds_sparkle_filled), contentDescription = null, tint = Blue, modifier = Modifier.size(16.dp))
                     Text("Подключить", color = Blue, fontSize = 15.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 6.dp))
                 }
                 Spacer(Modifier.weight(1f))
@@ -397,61 +428,66 @@ fun ChatScreen(
                     .height(140.dp)
                     .background(Brush.verticalGradient(listOf(Color.Transparent, Canvas))),
             )
-            val writing = draft.isNotBlank()
+            val writing = draft.isNotBlank() || files.isNotEmpty()
             Column(
                 Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
-                    .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
+                    .padding(start = 12.dp, end = 12.dp, bottom = 10.dp)
                     .fillMaxWidth()
-                    .animateContentSize(tween(280, easing = FastOutSlowInEasing))
-                    .clip(RoundedCornerShape(if (writing) 24.dp else 26.dp))
-                    .border(1.dp, Color(0xFFE6E6E6), RoundedCornerShape(if (writing) 24.dp else 26.dp))
-                    .background(Composer)
-                    .padding(horizontal = 6.dp, vertical = if (writing) 8.dp else 0.dp),
+                    .shadow(16.dp, RoundedCornerShape(28.dp), ambientColor = Color(0x33000000), spotColor = Color(0x24000000))
+                    .clip(RoundedCornerShape(28.dp))
+                    .border(1.dp, Color(0xFFE6E6E6), RoundedCornerShape(28.dp))
+                    .background(Composer),
             ) {
-                AnimatedVisibility(visible = writing, enter = fadeIn(tween(180)) + slideInVertically { it / 3 }, exit = fadeOut(tween(120))) {
+                if (files.isNotEmpty()) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(start = 12.dp, end = 8.dp, top = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        files.forEach { file ->
+                            Text(
+                                file.name,
+                                color = TextMain,
+                                fontSize = 13.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier
+                                    .padding(end = 6.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Bubble)
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                            )
+                        }
+                    }
+                }
+                Row(Modifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        painterResource(R.drawable.ds_plus),
+                        contentDescription = "Добавить",
+                        tint = TextMain,
+                        modifier = Modifier.padding(horizontal = 10.dp).size(22.dp).clickable { attachMenu = !attachMenu },
+                    )
                     BasicTextField(
                         value = draft,
                         onValueChange = { draft = it },
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp, max = 160.dp).padding(start = 10.dp, top = 6.dp, end = 10.dp, bottom = 4.dp),
-                        textStyle = TextStyle(color = TextMain, fontSize = 16.sp, lineHeight = 22.sp),
+                        modifier = Modifier.weight(1f),
+                        textStyle = TextStyle(color = TextMain, fontSize = 16.sp),
                         cursorBrush = SolidColor(Blue),
-                        maxLines = 8,
+                        singleLine = true,
+                        decorationBox = { inner ->
+                            if (draft.isEmpty()) {
+                                Text(
+                                    if (temporary) "Временный чат" else "Спросить ChatGPT",
+                                    color = TextFaint,
+                                    fontSize = 16.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                            inner()
+                        },
                     )
-                }
-                Row(Modifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(painterResource(R.drawable.ds_plus), contentDescription = null, tint = TextMain, modifier = Modifier.padding(horizontal = 8.dp).size(22.dp))
-                    if (!writing) {
-                        BasicTextField(
-                            value = draft,
-                            onValueChange = { draft = it },
-                            modifier = Modifier.weight(1f),
-                            textStyle = TextStyle(color = TextMain, fontSize = 16.sp),
-                            cursorBrush = SolidColor(Blue),
-                            singleLine = true,
-                            decorationBox = { inner ->
-                                if (draft.isEmpty()) {
-                                    Text(
-                                        if (temporary) "Временный чат" else "Спросить ChatGPT",
-                                        color = TextFaint,
-                                        fontSize = 16.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                }
-                                inner()
-                            },
-                        )
-                    } else {
-                        Spacer(Modifier.weight(1f))
-                        Icon(
-                            painterResource(R.drawable.ds_expand),
-                            contentDescription = "На весь экран",
-                            tint = TextMain,
-                            modifier = Modifier.padding(end = 10.dp).size(22.dp).clickable { expanded = true },
-                        )
-                    }
                     if (!busy) {
                         Icon(
                             painterResource(R.drawable.ds_mic),
@@ -471,7 +507,7 @@ fun ChatScreen(
                     ) { slot ->
                         Box(
                             Modifier
-                                .padding(end = 2.dp)
+                                .padding(end = 6.dp)
                                 .size(34.dp)
                                 .clip(CircleShape)
                                 .background(Blue)
@@ -480,10 +516,13 @@ fun ChatScreen(
                                         "stop" -> onStop()
                                         "send" -> {
                                             val text = draft.trim()
-                                            if (text.isNotEmpty()) {
+                                            if (text.isNotEmpty() || files.isNotEmpty()) {
+                                                val attached = files
                                                 draft = ""
+                                                files = emptyList()
                                                 expanded = false
-                                                onSend(text)
+                                                attachMenu = false
+                                                onSend(text, attached, deepThink)
                                             }
                                         }
                                     }
@@ -499,6 +538,32 @@ fun ChatScreen(
                     }
                 }
             }
+            if (attachMenu) {
+                Box(Modifier.fillMaxSize().clickable { attachMenu = false })
+                Column(
+                    Modifier
+                        .align(Alignment.BottomStart)
+                        .navigationBarsPadding()
+                        .padding(start = 16.dp, bottom = 74.dp)
+                        .width(280.dp)
+                        .shadow(18.dp, RoundedCornerShape(28.dp))
+                        .clip(RoundedCornerShape(28.dp))
+                        .background(White)
+                        .padding(vertical = 8.dp),
+                ) {
+                    AttachRow(R.drawable.ds_camera, "Камера") { cameraPermission.launch(Manifest.permission.CAMERA) }
+                    AttachRow(R.drawable.ds_image, "Фото") { pickPhoto.launch("image/*") }
+                    AttachRow(R.drawable.ds_clip, "Файлы") { pickFile.launch("*/*") }
+                    AttachRow(R.drawable.ds_plugin, "Плагины") {
+                        attachMenu = false
+                        connect = true
+                    }
+                    AttachRow(R.drawable.ds_brain, "Размышлять глубже", checked = deepThink) {
+                        deepThink = !deepThink
+                        attachMenu = false
+                    }
+                }
+            }
             if (expanded) {
                 PredictiveBackSlide(onBack = { expanded = false }) {
                     ExpandedComposer(
@@ -507,11 +572,13 @@ fun ChatScreen(
                         onClose = { expanded = false },
                         onSend = {
                             val text = draft.trim()
-                            if (text.isNotEmpty() && !busy) {
-                                draft = ""
-                                expanded = false
-                                onSend(text)
-                            }
+                        if (text.isNotEmpty() && !busy) {
+                            draft = ""
+                            expanded = false
+                            val attached = files
+                            files = emptyList()
+                            onSend(text, attached, deepThink)
+                        }
                         },
                     )
                 }
@@ -964,6 +1031,34 @@ private fun SideRow(icon: Int, title: String) {
         Icon(painterResource(icon), contentDescription = null, tint = TextMain, modifier = Modifier.size(22.dp))
         Text(title, color = TextMain, fontSize = 16.sp, modifier = Modifier.padding(start = 15.dp))
     }
+}
+
+@Composable
+private fun AttachRow(icon: Int, title: String, checked: Boolean = false, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().height(56.dp).clickable(onClick = onClick).padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier.size(40.dp).clip(CircleShape).background(if (checked) BlueSoft else PlusGray),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(painterResource(icon), contentDescription = null, tint = if (checked) Blue else TextMain, modifier = Modifier.size(20.dp))
+        }
+        Text(title, color = TextMain, fontSize = 16.sp, modifier = Modifier.padding(start = 14.dp).weight(1f))
+        if (checked) Text("✓", color = Blue, fontSize = 16.sp)
+    }
+}
+
+private suspend fun readPending(context: Context, uri: Uri, fallback: String): PendingFile? = withContext(Dispatchers.IO) {
+    val resolver = context.contentResolver
+    val name = resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+        if (cursor.moveToFirst()) cursor.getString(0) else null
+    } ?: fallback
+    val mime = resolver.getType(uri) ?: "application/octet-stream"
+    val bytes = resolver.openInputStream(uri)?.use { it.readBytes() } ?: return@withContext null
+    if (bytes.size > 4_000_000) return@withContext PendingFile(name, mime, bytes.copyOf(4_000_000))
+    PendingFile(name, mime, bytes)
 }
 
 @Composable

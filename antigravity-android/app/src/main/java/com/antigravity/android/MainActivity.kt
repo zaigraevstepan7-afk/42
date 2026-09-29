@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.util.Base64
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -33,6 +34,7 @@ import com.antigravity.android.net.agentTools
 import com.antigravity.android.net.tokenize
 import com.antigravity.android.ui.Canvas
 import com.antigravity.android.ui.ChatScreen
+import com.antigravity.android.ui.PendingFile
 import com.antigravity.android.ui.ReplyPhase
 import com.antigravity.android.ui.SettingsScreen
 import com.antigravity.android.ui.TextMain
@@ -182,12 +184,19 @@ class MainActivity : ComponentActivity() {
                         phase = "welcome"
                     },
                     onSettings = { settings = true },
-                    onSend = { text ->
+                    onSend = { text, files, deep ->
                         val active = session ?: return@ChatScreen
-                        if (text.isBlank() || busy) return@ChatScreen
-                        thread.messages.add(UiMessage("user", text, sending = true))
-                        if (thread.title == "Новый чат") thread.title = text.take(42)
-                        thread.contents.put(userText(text))
+                        if ((text.isBlank() && files.isEmpty()) || busy) return@ChatScreen
+                        val shown = buildString {
+                            append(text)
+                            files.forEach { file ->
+                                if (isNotEmpty()) append('\n')
+                                append(file.name)
+                            }
+                        }
+                        thread.messages.add(UiMessage("user", shown, sending = true))
+                        if (thread.title == "Новый чат") thread.title = text.ifBlank { files.firstOrNull()?.name ?: "Вложение" }.take(42)
+                        thread.contents.put(userContent(text, files, deep))
                         halt.set(false)
                         busy = true
                         generateJob = scope.launch {
@@ -479,10 +488,33 @@ class ChatThread {
     val sessionId: String = "-" + kotlin.math.abs(id.hashCode().toLong())
 }
 
-private fun userText(text: String): JSONObject {
-    return JSONObject()
-        .put("role", "user")
-        .put("parts", JSONArray().put(JSONObject().put("text", text)))
+private fun userContent(text: String, files: List<PendingFile>, deep: Boolean): JSONObject {
+    val parts = JSONArray()
+    val body = buildString {
+        append(text)
+        if (deep) {
+            if (isNotEmpty()) append("\n\n")
+            append("Размышляй глубже и подробнее.")
+        }
+    }
+    if (body.isNotBlank()) parts.put(JSONObject().put("text", body))
+    files.forEach { file ->
+        if (file.mime.startsWith("image/")) {
+            parts.put(
+                JSONObject().put(
+                    "inlineData",
+                    JSONObject()
+                        .put("mimeType", file.mime)
+                        .put("data", Base64.encodeToString(file.bytes, Base64.NO_WRAP)),
+                ),
+            )
+        } else {
+            val decoded = runCatching { file.bytes.toString(Charsets.UTF_8).take(12_000) }.getOrDefault("")
+            parts.put(JSONObject().put("text", "Вложение ${file.name}:\n$decoded"))
+        }
+    }
+    if (parts.length() == 0) parts.put(JSONObject().put("text", text))
+    return JSONObject().put("role", "user").put("parts", parts)
 }
 
 private fun modelContent(parts: List<com.antigravity.android.net.ModelPart>): JSONObject {
