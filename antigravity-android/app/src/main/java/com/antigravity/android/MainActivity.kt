@@ -2,6 +2,8 @@ package com.antigravity.android
 
 import android.content.Intent
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -25,21 +27,30 @@ import com.antigravity.android.auth.AntigravityAuthClient
 import com.antigravity.android.auth.AntigravityOAuth
 import com.antigravity.android.auth.Session
 import com.antigravity.android.auth.SessionStore
+import com.antigravity.android.net.Citation
 import com.antigravity.android.net.CloudCodeClient
 import com.antigravity.android.net.agentTools
+import com.antigravity.android.net.tokenize
 import com.antigravity.android.ui.Canvas
 import com.antigravity.android.ui.ChatScreen
+import com.antigravity.android.ui.ReplyPhase
 import com.antigravity.android.ui.SettingsScreen
 import com.antigravity.android.ui.TextMain
 import com.antigravity.android.ui.UiMessage
 import com.antigravity.android.ui.WelcomeScreen
 import com.topjohnwu.superuser.Shell
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 
 class MainActivity : ComponentActivity() {
     private val auth = AntigravityAuthClient()
@@ -71,6 +82,8 @@ class MainActivity : ComponentActivity() {
         val chats = remember { mutableStateListOf<ChatThread>() }
         var currentId by remember { mutableStateOf<String?>(null) }
         val scope = rememberCoroutineScope()
+        var generateJob by remember { mutableStateOf<Job?>(null) }
+        val halt = remember { AtomicBoolean(false) }
 
         fun current(): ChatThread {
             val found = chats.firstOrNull { it.id == currentId }
@@ -172,67 +185,31 @@ class MainActivity : ComponentActivity() {
                     onSend = { text ->
                         val active = session ?: return@ChatScreen
                         if (text.isBlank() || busy) return@ChatScreen
-                        thread.messages.add(UiMessage("user", text))
+                        thread.messages.add(UiMessage("user", text, sending = true))
                         if (thread.title == "Новый чат") thread.title = text.take(42)
                         thread.contents.put(userText(text))
-                        scope.launch {
-                            busy = true
-                            var live: Session = active
-                            try {
-                                withContext(Dispatchers.IO) {
-                                    for (round in 0 until 8) {
-                                        val inner = JSONObject()
-                                            .put("systemInstruction", systemInstruction())
-                                            .put("contents", thread.contents)
-                                            .put(
-                                                "generationConfig",
-                                                JSONObject().put(
-                                                    "thinkingConfig",
-                                                    JSONObject().put("includeThoughts", true),
-                                                ),
-                                            )
-                                            .put("tools", agentTools())
-                                            .put("sessionId", thread.sessionId)
-                                        val (fresh, parts) = cloud.generate(live, thread.model, JSONObject().put("request", inner))
-                                        live = fresh
-                                        val calls = parts.filter { !it.callName.isNullOrBlank() }
-                                        withContext(Dispatchers.Main) {
-                                            session = fresh
-                                            parts.filter { it.thought && !it.text.isNullOrBlank() }.forEach {
-                                                thread.messages.add(UiMessage("tool", it.text.orEmpty()))
-                                            }
-                                            parts.filter { !it.thought && !it.text.isNullOrBlank() && it.callName == null }.forEach {
-                                                thread.messages.add(UiMessage("model", it.text.orEmpty()))
-                                            }
-                                        }
-                                        thread.contents.put(modelContent(parts))
-                                        if (calls.isEmpty()) break
-                                        val responses = JSONArray()
-                                        calls.forEach { call ->
-                                            val output = DeviceTools.run(call.callName.orEmpty(), call.callArgs ?: JSONObject())
-                                            withContext(Dispatchers.Main) {
-                                                thread.messages.add(UiMessage("tool", call.callName.orEmpty()))
-                                            }
-                                            responses.put(
-                                                JSONObject().put(
-                                                    "functionResponse",
-                                                    JSONObject()
-                                                        .put("name", call.callName)
-                                                        .put("response", JSONObject().put("output", output)),
-                                                ),
-                                            )
-                                        }
-                                        thread.contents.put(JSONObject().put("role", "user").put("parts", responses))
-                                        if (round == 7) break
-                                    }
-                                }
-                                store.write(live)
-                                session = live
-                            } catch (t: Throwable) {
-                                thread.messages.add(UiMessage("model", t.message ?: "ошибка"))
-                            } finally {
-                                busy = false
-                            }
+                        halt.set(false)
+                        busy = true
+                        generateJob = scope.launch {
+                            runGeneration(thread, active, text, halt, { busy = it }) { session = it }
+                        }
+                    },
+                    onStop = {
+                        halt.set(true)
+                        generateJob?.cancel()
+                        cloud.cancel()
+                        finalizeStop(thread)
+                        busy = false
+                    },
+                    onRegenerate = {
+                        if (busy) return@ChatScreen
+                        val lastUser = thread.messages.lastOrNull { it.role == "user" }?.text ?: return@ChatScreen
+                        rewindAfterUser(thread)
+                        halt.set(false)
+                        val active = session ?: return@ChatScreen
+                        busy = true
+                        generateJob = scope.launch {
+                            runGeneration(thread, active, lastUser, halt, { busy = it }) { session = it }
                         }
                     },
                 )
@@ -257,6 +234,172 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private suspend fun runGeneration(
+        thread: ChatThread,
+        start: Session,
+        prompt: String,
+        halt: AtomicBoolean,
+        setBusy: (Boolean) -> Unit,
+        onSession: (Session) -> Unit,
+    ) = coroutineScope {
+        setBusy(true)
+        thread.messages.add(
+            UiMessage("model", "", phase = ReplyPhase.Waiting, complete = false, thinking = false),
+        )
+        val searchReady = AtomicBoolean(false)
+        val shownText = AtomicBoolean(false)
+        val streaming = AtomicBoolean(true)
+        val buffered = AtomicReference("")
+        val foundCitations = AtomicReference<List<Citation>>(emptyList())
+        val intro = launch {
+            delay(300)
+            if (halt.get()) return@launch
+            patchUserSending(thread, false)
+            delay(260)
+            if (halt.get() || shownText.get()) return@launch
+            patchAssistant(thread) {
+                it.copy(phase = ReplyPhase.Searching, searchLabel = "Поиск в интернете...", thinking = true)
+            }
+            delay(650)
+            if (halt.get() || shownText.get()) return@launch
+            patchAssistant(thread) {
+                it.copy(
+                    phase = ReplyPhase.Searching,
+                    searchLabel = searchQueryLabel(prompt),
+                    thinking = true,
+                )
+            }
+            delay(400)
+            searchReady.set(true)
+        }
+        try {
+            var live = start
+            withContext(Dispatchers.IO) {
+                for (round in 0 until 8) {
+                    if (halt.get()) break
+                    val inner = JSONObject()
+                        .put("systemInstruction", systemInstruction())
+                        .put("contents", thread.contents)
+                        .put(
+                            "generationConfig",
+                            JSONObject().put(
+                                "thinkingConfig",
+                                JSONObject().put("includeThoughts", true),
+                            ),
+                        )
+                        .put("tools", agentTools())
+                        .put("sessionId", thread.sessionId)
+                    val (fresh, parts) = cloud.stream(live, thread.model, JSONObject().put("request", inner), halt) { delta ->
+                        onMain {
+                            if (delta.searchQueries.isNotEmpty()) {
+                                patchAssistant(thread) {
+                                    it.copy(
+                                        searchLabel = searchQueryLabel(delta.searchQueries.last()),
+                                        phase = if (shownText.get()) it.phase else ReplyPhase.Searching,
+                                        thinking = !shownText.get(),
+                                    )
+                                }
+                            }
+                            if (!delta.thought.isNullOrBlank() && !shownText.get()) {
+                                patchAssistant(thread) {
+                                    it.copy(
+                                        thinking = true,
+                                        phase = if (it.phase == ReplyPhase.Waiting) ReplyPhase.Searching else it.phase,
+                                        searchLabel = it.searchLabel ?: "Поиск в интернете...",
+                                    )
+                                }
+                            }
+                            val incoming = delta.text
+                            if (!incoming.isNullOrBlank()) {
+                                buffered.set(incoming)
+                                if (delta.citations.isNotEmpty()) foundCitations.set(delta.citations)
+                                if (searchReady.get() && streaming.get()) {
+                                    shownText.set(true)
+                                    patchAssistant(thread) {
+                                        it.copy(
+                                            text = incoming,
+                                            phase = ReplyPhase.Streaming,
+                                            thinking = false,
+                                            citations = foundCitations.get(),
+                                            searchLabel = null,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    live = fresh
+                    val calls = parts.filter { !it.callName.isNullOrBlank() }
+                    thread.contents.put(modelContent(parts))
+                    if (calls.isEmpty()) break
+                    val responses = JSONArray()
+                    calls.forEach { call ->
+                        val output = DeviceTools.run(call.callName.orEmpty(), call.callArgs ?: JSONObject())
+                        responses.put(
+                            JSONObject().put(
+                                "functionResponse",
+                                JSONObject()
+                                    .put("name", call.callName)
+                                    .put("response", JSONObject().put("output", output)),
+                            ),
+                        )
+                    }
+                    thread.contents.put(JSONObject().put("role", "user").put("parts", responses))
+                    onMain {
+                        shownText.set(false)
+                        searchReady.set(true)
+                        patchAssistant(thread) {
+                            it.copy(phase = ReplyPhase.Searching, thinking = true, searchLabel = "Поиск в интернете...")
+                        }
+                    }
+                }
+            }
+            streaming.set(false)
+            intro.join()
+            if (!halt.get()) {
+                val full = buffered.get()
+                val cites = foundCitations.get()
+                if (!shownText.get() && full.isNotEmpty()) {
+                    var shown = ""
+                    for (chunk in tokenize(full)) {
+                        if (halt.get()) break
+                        shown += chunk
+                        patchAssistant(thread) {
+                            it.copy(text = shown, phase = ReplyPhase.Streaming, thinking = false, citations = cites)
+                        }
+                        delay(16)
+                    }
+                    shownText.set(true)
+                }
+                patchAssistant(thread) {
+                    it.copy(
+                        phase = ReplyPhase.Done,
+                        complete = true,
+                        thinking = false,
+                        citations = cites.ifEmpty { it.citations },
+                    )
+                }
+                store.write(live)
+                onSession(live)
+            }
+        } catch (_: CancellationException) {
+            finalizeStop(thread)
+        } catch (t: Throwable) {
+            patchUserSending(thread, false)
+            patchAssistant(thread) {
+                it.copy(
+                    text = t.message ?: "ошибка",
+                    phase = ReplyPhase.Done,
+                    complete = true,
+                    thinking = false,
+                )
+            }
+        } finally {
+            patchUserSending(thread, false)
+            setBusy(false)
+        }
+    }
+
     companion object {
         val MODELS = listOf(
             "gemini-2.5-flash",
@@ -267,6 +410,52 @@ class MainActivity : ComponentActivity() {
             "gemini-3.7-pro",
         )
     }
+}
+
+private fun patchUserSending(thread: ChatThread, sending: Boolean) {
+    val idx = thread.messages.indexOfLast { it.role == "user" }
+    if (idx >= 0) thread.messages[idx] = thread.messages[idx].copy(sending = sending)
+}
+
+private fun patchAssistant(thread: ChatThread, update: (UiMessage) -> UiMessage) {
+    val idx = thread.messages.indexOfLast { it.role == "model" }
+    if (idx >= 0) thread.messages[idx] = update(thread.messages[idx])
+}
+
+private fun finalizeStop(thread: ChatThread) {
+    patchUserSending(thread, false)
+    patchAssistant(thread) { current ->
+        current.copy(
+            sending = false,
+            thinking = false,
+            complete = true,
+            phase = ReplyPhase.Done,
+            text = current.text.ifBlank { "Остановлено" },
+        )
+    }
+}
+
+private fun rewindAfterUser(thread: ChatThread) {
+    while (thread.messages.isNotEmpty() && thread.messages.last().role != "user") {
+        thread.messages.removeAt(thread.messages.lastIndex)
+    }
+    while (thread.contents.length() > 0) {
+        val last = thread.contents.optJSONObject(thread.contents.length() - 1) ?: break
+        val role = last.optString("role")
+        val first = last.optJSONArray("parts")?.optJSONObject(0)
+        val tool = first?.has("functionResponse") == true
+        if (role == "model" || tool) thread.contents.remove(thread.contents.length() - 1) else break
+    }
+}
+
+private fun searchQueryLabel(query: String): String {
+    val clipped = if (query.length > 56) query.take(56) + "…" else query
+    return "Поиск по запросу «$clipped»"
+}
+
+private fun onMain(block: () -> Unit) {
+    if (Looper.myLooper() == Looper.getMainLooper()) block()
+    else Handler(Looper.getMainLooper()).post(block)
 }
 
 class ChatThread {
@@ -304,8 +493,11 @@ private fun modelContent(parts: List<com.antigravity.android.net.ModelPart>): JS
 private fun systemInstruction(): JSONObject {
     val text = """
         Ты работаешь внутри телефона с root. Отвечай на языке пользователя.
+        Если вопрос про факты, новости или актуальное, опирайся на поиск в интернете.
+        Для фактов добавляй короткие ссылки на источники в тексте, где это уместно.
         Файлы, команды и загрузки делай инструментами list_dir, read_file, write_file, exec, download.
         Пути абсолютные. Не выдумывай вывод команд.
+        Форматируй ответ markdown: сначала короткий абзац, затем жирный заголовок, затем абзацы.
     """.trimIndent()
     return JSONObject().put("parts", JSONArray().put(JSONObject().put("text", text)))
 }

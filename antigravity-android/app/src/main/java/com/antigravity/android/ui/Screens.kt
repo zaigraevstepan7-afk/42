@@ -1,7 +1,19 @@
 package com.antigravity.android.ui
 
+import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.speech.RecognizerIntent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -12,30 +24,31 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import android.Manifest
-import android.content.Intent
-import android.speech.RecognizerIntent
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -46,11 +59,14 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.Text
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -64,35 +80,44 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.Image
-import androidx.compose.material3.DrawerValue
-import androidx.compose.material3.Text
-import androidx.compose.ui.draw.blur
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.res.painterResource
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.navigationBars
 import com.antigravity.android.R
+import com.antigravity.android.net.Citation
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.HazeTint
-import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.launch
+import java.util.UUID
 
-data class UiMessage(val role: String, val text: String)
+enum class ReplyPhase { Waiting, Searching, Streaming, Done }
+
+data class UiMessage(
+    val role: String,
+    val text: String,
+    val id: String = UUID.randomUUID().toString(),
+    val sending: Boolean = false,
+    val phase: ReplyPhase = ReplyPhase.Done,
+    val searchLabel: String? = null,
+    val thinking: Boolean = false,
+    val citations: List<Citation> = emptyList(),
+    val complete: Boolean = true,
+)
 
 @Composable
 fun Blossom(modifier: Modifier = Modifier, size: androidx.compose.ui.unit.Dp = 32.dp) {
@@ -180,9 +205,12 @@ fun ChatScreen(
     onNewChat: () -> Unit,
     onOpenChat: (String) -> Unit,
     onSend: (String) -> Unit,
+    onStop: () -> Unit,
+    onRegenerate: () -> Unit,
     onLogout: () -> Unit,
     onSettings: () -> Unit,
 ) {
+    val context = LocalContext.current
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     var draft by remember { mutableStateOf("") }
@@ -200,15 +228,11 @@ fun ChatScreen(
     var connect by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
     var temporary by remember { mutableStateOf(false) }
+    var sources by remember { mutableStateOf<List<Citation>?>(null) }
     val listState = rememberLazyListState()
     val hazeState = rememberHazeState()
-    val barBlur = HazeStyle(
-        backgroundColor = Canvas.copy(alpha = 0.72f),
-        tints = listOf(HazeTint(Canvas.copy(alpha = 0.55f))),
-        blurRadius = 20.dp,
-        noiseFactor = 0.08f,
-    )
-    LaunchedEffect(messages.size, busy) {
+    val last = messages.lastOrNull()
+    LaunchedEffect(messages.size, last?.text, last?.phase, last?.sending, busy) {
         if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
     }
 
@@ -240,7 +264,7 @@ fun ChatScreen(
                                 color = TextMain,
                                 fontSize = 16.sp,
                                 maxLines = 1,
-                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable {
@@ -305,24 +329,26 @@ fun ChatScreen(
                     LazyColumn(
                         state = listState,
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(top = topInset + 52.dp, bottom = bottomInset + 76.dp),
+                        contentPadding = PaddingValues(top = topInset + 52.dp, bottom = bottomInset + 88.dp),
                     ) {
-                        itemsIndexed(messages) { index, message ->
+                        itemsIndexed(messages, key = { _, item -> item.id }) { index, message ->
                             when (message.role) {
-                                "user" -> UserBubble(message.text)
+                                "user" -> UserBubble(message.text, message.sending)
                                 "tool" -> Text(
                                     message.text,
                                     color = TextFaint,
                                     fontSize = 13.sp,
                                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
                                 )
-                                else -> Column {
-                                    AnswerText(message.text, reveal = index == messages.lastIndex)
-                                }
+                                else -> AssistantTurn(
+                                    message = message,
+                                    showActions = message.complete && message.phase == ReplyPhase.Done && index == messages.indexOfLast { it.role == "model" },
+                                    onCopy = { copyText(context, message.text) },
+                                    onShare = { shareText(context, message.text) },
+                                    onRegenerate = onRegenerate,
+                                    onSources = { sources = message.citations },
+                                )
                             }
-                        }
-                        if (busy) {
-                            item { ThinkingDots() }
                         }
                     }
                 }
@@ -406,7 +432,7 @@ fun ChatScreen(
                                         color = TextFaint,
                                         fontSize = 16.sp,
                                         maxLines = 1,
-                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                        overflow = TextOverflow.Ellipsis,
                                     )
                                 }
                                 inner()
@@ -421,37 +447,48 @@ fun ChatScreen(
                             modifier = Modifier.padding(end = 10.dp).size(22.dp).clickable { expanded = true },
                         )
                     }
-                    Icon(
-                        painterResource(R.drawable.ds_mic),
-                        contentDescription = "Голос в текст",
-                        tint = TextMain,
-                        modifier = Modifier.padding(end = 8.dp).size(22.dp).clickable { dictate() },
-                    )
+                    if (!busy) {
+                        Icon(
+                            painterResource(R.drawable.ds_mic),
+                            contentDescription = "Голос в текст",
+                            tint = TextMain,
+                            modifier = Modifier.padding(end = 8.dp).size(22.dp).clickable { dictate() },
+                        )
+                    }
                     AnimatedContent(
-                        targetState = writing || temporary,
+                        targetState = when {
+                            busy -> "stop"
+                            writing || temporary -> "send"
+                            else -> "voice"
+                        },
                         transitionSpec = { (fadeIn(tween(180)) + scaleIn(tween(220), initialScale = 0.8f)) togetherWith fadeOut(tween(120)) },
                         label = "send-slot",
-                    ) { showSend ->
-                        if (!showSend) {
-                            Box(Modifier.padding(end = 2.dp).size(34.dp).clip(CircleShape).background(Blue), contentAlignment = Alignment.Center) {
-                                Icon(painterResource(R.drawable.voice_button), contentDescription = null, tint = White, modifier = Modifier.size(18.dp))
-                            }
-                        } else {
-                            Box(
-                                Modifier
-                                    .padding(end = 2.dp)
-                                    .size(34.dp)
-                                    .clip(CircleShape)
-                                    .background(Blue)
-                                    .clickable(enabled = draft.isNotBlank() && !busy) {
-                                        val text = draft.trim()
-                                        draft = ""
-                                        expanded = false
-                                        onSend(text)
-                                    },
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Icon(painterResource(R.drawable.ds_arrow_up), contentDescription = "Отправить", tint = White, modifier = Modifier.size(18.dp))
+                    ) { slot ->
+                        Box(
+                            Modifier
+                                .padding(end = 2.dp)
+                                .size(34.dp)
+                                .clip(CircleShape)
+                                .background(Blue)
+                                .clickable {
+                                    when (slot) {
+                                        "stop" -> onStop()
+                                        "send" -> {
+                                            val text = draft.trim()
+                                            if (text.isNotEmpty()) {
+                                                draft = ""
+                                                expanded = false
+                                                onSend(text)
+                                            }
+                                        }
+                                    }
+                                },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            when (slot) {
+                                "stop" -> Box(Modifier.size(11.dp).clip(RoundedCornerShape(1.5.dp)).background(White))
+                                "send" -> Icon(painterResource(R.drawable.ds_arrow_up), contentDescription = "Отправить", tint = White, modifier = Modifier.size(18.dp))
+                                else -> Icon(painterResource(R.drawable.voice_button), contentDescription = null, tint = White, modifier = Modifier.size(18.dp))
                             }
                         }
                     }
@@ -479,6 +516,36 @@ fun ChatScreen(
         ModalBottomSheet(onDismissRequest = { connect = false }, containerColor = White, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
             Text("Подключить", color = TextMain, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
             Text("Подключите приложения, чтобы пользоваться ими в чате.", color = TextDim, fontSize = 16.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+            Spacer(Modifier.height(24.dp))
+        }
+    }
+    val openSources = sources
+    if (openSources != null) {
+        ModalBottomSheet(
+            onDismissRequest = { sources = null },
+            containerColor = White,
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        ) {
+            Text("Источники", color = TextMain, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+            if (openSources.isEmpty()) {
+                Text("Источники появятся, когда модель найдёт страницы в сети.", color = TextDim, fontSize = 15.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+            } else {
+                openSources.forEach { citation ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { openUrl(context, citation.url) }
+                            .padding(horizontal = 20.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(painterResource(R.drawable.ds_globe2), contentDescription = null, tint = TextDim, modifier = Modifier.size(18.dp))
+                        Column(Modifier.padding(start = 12.dp).weight(1f)) {
+                            Text(citation.label, color = TextMain, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                            Text(citation.url, color = TextFaint, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                }
+            }
             Spacer(Modifier.height(24.dp))
         }
     }
@@ -510,24 +577,225 @@ fun ChatScreen(
 }
 
 @Composable
-private fun AnswerText(text: String, reveal: Boolean) {
-    var count by remember(text) { mutableIntStateOf(if (reveal) 0 else text.length) }
-    LaunchedEffect(text, reveal) {
-        if (!reveal) {
-            count = text.length
-            return@LaunchedEffect
+private fun AssistantTurn(
+    message: UiMessage,
+    showActions: Boolean,
+    onCopy: () -> Unit,
+    onShare: () -> Unit,
+    onRegenerate: () -> Unit,
+    onSources: () -> Unit,
+) {
+    val showSearch = message.phase == ReplyPhase.Searching || (message.phase == ReplyPhase.Streaming && message.text.isEmpty())
+    Column(Modifier.fillMaxWidth()) {
+        AnimatedVisibility(visible = message.phase == ReplyPhase.Waiting && message.text.isEmpty(), enter = fadeIn(tween(160)), exit = fadeOut(tween(180))) {
+            ThinkingDots()
         }
-        while (count < text.length) {
-            count = minOf(text.length, count + 2)
-            kotlinx.coroutines.delay(16)
+        AnimatedVisibility(visible = showSearch, enter = fadeIn(tween(220)), exit = fadeOut(tween(260))) {
+            Column {
+                SearchStatus(message.searchLabel ?: "Поиск в интернете...")
+                if (message.thinking) ThinkingShimmer()
+            }
+        }
+        if (message.text.isNotEmpty()) {
+            AnswerMarkdown(message.text, message.citations, streaming = message.phase == ReplyPhase.Streaming)
+        }
+        AnimatedVisibility(visible = showActions, enter = fadeIn(tween(280)) + slideInVertically(tween(280)) { it / 4 }) {
+            ActionBar(hasSources = message.citations.isNotEmpty(), onCopy = onCopy, onShare = onShare, onRegenerate = onRegenerate, onSources = onSources)
         }
     }
+}
+
+@Composable
+private fun SearchStatus(label: String) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(painterResource(R.drawable.ds_globe2), contentDescription = null, tint = TextDim, modifier = Modifier.size(16.dp))
+        Text(
+            label,
+            color = TextDim,
+            fontSize = 14.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f).padding(start = 8.dp, end = 10.dp),
+        )
+        CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 1.6.dp, color = TextDim, trackColor = Color.Transparent)
+    }
+}
+
+@Composable
+private fun ThinkingShimmer() {
+    val transition = rememberInfiniteTransition(label = "shimmer")
+    val shift by transition.animateFloat(
+        initialValue = -160f,
+        targetValue = 420f,
+        animationSpec = infiniteRepeatable(tween(1300, easing = LinearEasing), RepeatMode.Restart),
+        label = "shift",
+    )
     Text(
-        text.take(count),
-        color = TextMain,
-        fontSize = 16.sp,
-        lineHeight = 24.sp,
-        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+        "Обдумывание",
+        fontSize = 15.sp,
+        style = TextStyle(
+            brush = Brush.linearGradient(
+                colors = listOf(
+                    Color(0xFFB4B4B4),
+                    Color(0xFFB4B4B4),
+                    Color(0xFFEDEDED),
+                    Color(0xFF1A1A1A),
+                    Color(0xFFEDEDED),
+                    Color(0xFFB4B4B4),
+                ),
+                start = Offset(shift, 0f),
+                end = Offset(shift + 170f, 0f),
+            ),
+        ),
+        modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+    )
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AnswerMarkdown(text: String, citations: List<Citation>, streaming: Boolean) {
+    val context = LocalContext.current
+    val blocks = remember(text) { markdownBlocks(text) }
+    Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+        blocks.forEach { block ->
+            when (block) {
+                is MdBlock.Heading -> Text(
+                    block.text,
+                    color = TextMain,
+                    fontSize = if (block.level <= 1) 22.sp else 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    lineHeight = if (block.level <= 1) 28.sp else 24.sp,
+                    modifier = Modifier.padding(top = 10.dp, bottom = 8.dp),
+                )
+                is MdBlock.Paragraph -> Text(
+                    inlineMarkdown(block.text),
+                    color = TextMain,
+                    fontSize = 16.sp,
+                    lineHeight = 24.sp,
+                    modifier = Modifier.padding(bottom = 10.dp),
+                )
+            }
+        }
+        if (citations.isNotEmpty()) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.padding(top = 2.dp),
+            ) {
+                citations.take(6).forEach { citation ->
+                    Text(
+                        citation.label,
+                        color = Color(0xFF5C5C5C),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(Color(0xFFEEEEEE))
+                            .clickable { openUrl(context, citation.url) }
+                            .padding(horizontal = 8.dp, vertical = 3.dp),
+                    )
+                }
+            }
+        }
+        if (streaming) Spacer(Modifier.height(4.dp))
+    }
+}
+
+private sealed class MdBlock {
+    data class Heading(val level: Int, val text: String) : MdBlock()
+    data class Paragraph(val text: String) : MdBlock()
+}
+
+private fun markdownBlocks(text: String): List<MdBlock> {
+    val out = ArrayList<MdBlock>()
+    val paragraph = StringBuilder()
+    fun flush() {
+        val value = paragraph.toString().trim()
+        if (value.isNotEmpty()) out += MdBlock.Paragraph(value)
+        paragraph.clear()
+    }
+    text.split("\n").forEach { raw ->
+        val line = raw.trimEnd()
+        val trimmed = line.trim()
+        when {
+            trimmed.startsWith("### ") -> {
+                flush()
+                out += MdBlock.Heading(3, trimmed.removePrefix("### ").trim())
+            }
+            trimmed.startsWith("## ") -> {
+                flush()
+                out += MdBlock.Heading(2, trimmed.removePrefix("## ").trim())
+            }
+            trimmed.startsWith("# ") -> {
+                flush()
+                out += MdBlock.Heading(1, trimmed.removePrefix("# ").trim())
+            }
+            trimmed.isEmpty() -> flush()
+            trimmed.startsWith("- ") || trimmed.startsWith("* ") -> {
+                if (paragraph.isNotEmpty()) paragraph.append('\n')
+                paragraph.append("• ").append(trimmed.drop(2))
+            }
+            else -> {
+                if (paragraph.isNotEmpty()) paragraph.append(' ')
+                paragraph.append(trimmed)
+            }
+        }
+    }
+    flush()
+    return out
+}
+
+private fun inlineMarkdown(text: String) = buildAnnotatedString {
+    val regex = Regex("\\*\\*(.+?)\\*\\*")
+    var last = 0
+    regex.findAll(text).forEach { match ->
+        append(text.substring(last, match.range.first))
+        withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(match.groupValues[1]) }
+        last = match.range.last + 1
+    }
+    append(text.substring(last))
+}
+
+@Composable
+private fun ActionBar(
+    hasSources: Boolean,
+    onCopy: () -> Unit,
+    onShare: () -> Unit,
+    onRegenerate: () -> Unit,
+    onSources: () -> Unit,
+) {
+    var vote by remember { mutableIntStateOf(0) }
+    Row(
+        Modifier.fillMaxWidth().padding(start = 16.dp, end = 12.dp, top = 2.dp, bottom = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        ActionIcon(R.drawable.ds_copy, "Копировать", onClick = onCopy)
+        ActionIcon(R.drawable.ds_like, "Нравится", tint = if (vote == 1) Blue else TextFaint, onClick = { vote = if (vote == 1) 0 else 1 })
+        ActionIcon(R.drawable.ds_dislike, "Не нравится", tint = if (vote == -1) Blue else TextFaint, onClick = { vote = if (vote == -1) 0 else -1 })
+        ActionIcon(R.drawable.ds_share, "Поделиться", onClick = onShare)
+        ActionIcon(R.drawable.ds_refresh, "Перегенерировать", onClick = onRegenerate)
+        ActionIcon(R.drawable.ds_more, "Ещё", onClick = {})
+        Spacer(Modifier.weight(1f))
+        Row(
+            Modifier.clip(RoundedCornerShape(16.dp)).clickable(onClick = onSources).padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(painterResource(R.drawable.ds_globe2), contentDescription = null, tint = if (hasSources) TextMain else TextFaint, modifier = Modifier.size(16.dp))
+            Text("Источники", color = if (hasSources) TextMain else TextFaint, fontSize = 13.sp, modifier = Modifier.padding(start = 6.dp))
+        }
+    }
+}
+
+@Composable
+private fun ActionIcon(icon: Int, label: String, onClick: () -> Unit, tint: Color = TextFaint) {
+    Icon(
+        painterResource(icon),
+        contentDescription = label,
+        tint = tint,
+        modifier = Modifier.padding(end = 14.dp).size(18.dp).clickable(onClick = onClick),
     )
 }
 
@@ -540,30 +808,28 @@ private fun ThinkingDots() {
         animationSpec = infiniteRepeatable(tween(700), RepeatMode.Reverse),
         label = "pulse",
     )
-    Box(Modifier.padding(horizontal = 22.dp, vertical = 16.dp).size(10.dp).graphicsLayer {
-        scaleX = scale
-        scaleY = scale
-    }.clip(CircleShape).background(Blue))
+    Box(
+        Modifier
+            .padding(horizontal = 22.dp, vertical = 16.dp)
+            .size(10.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(CircleShape)
+            .background(Blue),
+    )
 }
 
 @Composable
-private fun ReactionRow() {
-    Row(Modifier.padding(start = 16.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        listOf(R.drawable.ds_like, R.drawable.ds_dislike, R.drawable.ds_speaker, R.drawable.ds_copy, R.drawable.ds_share, R.drawable.ds_more).forEach { icon ->
-            Icon(painterResource(icon), contentDescription = null, tint = TextFaint, modifier = Modifier.padding(end = 14.dp).size(18.dp))
-        }
-    }
-}
-
-@Composable
-private fun UserBubble(text: String) {
+private fun UserBubble(text: String, sending: Boolean) {
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
     AnimatedVisibility(
         visible = visible,
         enter = fadeIn(tween(180)) + slideInVertically(tween(220)) { it / 2 } + scaleIn(tween(220), initialScale = 0.96f),
     ) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.End) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalAlignment = Alignment.End) {
             Text(
                 text,
                 color = TextMain,
@@ -575,6 +841,9 @@ private fun UserBubble(text: String) {
                     .background(Bubble)
                     .padding(horizontal = 16.dp, vertical = 10.dp),
             )
+            AnimatedVisibility(visible = sending, enter = fadeIn(tween(80)), exit = fadeOut(tween(180))) {
+                Text("Отправка", color = TextFaint, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp, end = 4.dp))
+            }
         }
     }
 }
@@ -585,6 +854,27 @@ private fun dictationIntent(): Intent {
         putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ru-RU")
         putExtra(RecognizerIntent.EXTRA_PROMPT, "Говорите")
     }
+}
+
+private fun copyText(context: Context, text: String) {
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    clipboard.setPrimaryClip(ClipData.newPlainText("ChatGPT", text))
+}
+
+private fun shareText(context: Context, text: String) {
+    context.startActivity(
+        Intent.createChooser(
+            Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, text)
+            },
+            "Поделиться",
+        ),
+    )
+}
+
+private fun openUrl(context: Context, url: String) {
+    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
 }
 
 @Composable
@@ -651,5 +941,3 @@ private fun SuggestRow(icon: Int, title: String, onClick: () -> Unit) {
         Text(title, color = TextMain, fontSize = 16.sp, modifier = Modifier.padding(start = 14.dp))
     }
 }
-
-
