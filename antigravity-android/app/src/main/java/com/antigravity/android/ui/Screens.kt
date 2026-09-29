@@ -126,7 +126,7 @@ fun WelcomeScreen(busy: Boolean, error: String?, onGoogle: () -> Unit) {
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .height(48.dp)
+                    .heightIn(min = 48.dp)
                     .clip(RoundedCornerShape(24.dp))
                     .background(White)
                     .clickable(enabled = !busy, onClick = onGoogle)
@@ -248,7 +248,7 @@ fun ChatScreen(
         Box(Modifier.fillMaxSize().background(Canvas).imePadding()) {
             Box(Modifier.fillMaxSize().hazeSource(hazeState)) {
                 if (messages.isEmpty()) {
-                    Blossom(Modifier.align(Alignment.Center))
+                    Blossom(Modifier.align(Alignment.Center), size = 64.dp)
                 } else {
                     LazyColumn(
                         state = listState,
@@ -478,7 +478,7 @@ private fun UserBubble(text: String) {
         visible = visible,
         enter = fadeIn(tween(180)) + slideInVertically(tween(220)) { it / 2 } + scaleIn(tween(220), initialScale = 0.96f),
     ) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), horizontalArrangement = Arrangement.End) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.End) {
             Text(
                 text,
                 color = White,
