@@ -16,6 +16,11 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import android.Manifest
+import android.content.Intent
+import android.speech.RecognizerIntent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -181,6 +186,16 @@ fun ChatScreen(
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     var draft by remember { mutableStateOf("") }
+    val speech = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val spoken = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull().orEmpty()
+        if (spoken.isNotBlank()) draft = if (draft.isBlank()) spoken else "$draft $spoken"
+    }
+    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) speech.launch(dictationIntent())
+    }
+    val dictate = {
+        micPermission.launch(Manifest.permission.RECORD_AUDIO)
+    }
     var sheet by remember { mutableStateOf(false) }
     var connect by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
@@ -303,7 +318,6 @@ fun ChatScreen(
                                 )
                                 else -> Column {
                                     AnswerText(message.text, reveal = index == messages.lastIndex)
-                                    if (index == messages.lastIndex && !busy) ReactionRow()
                                 }
                             }
                         }
@@ -407,7 +421,12 @@ fun ChatScreen(
                             modifier = Modifier.padding(end = 10.dp).size(22.dp).clickable { expanded = true },
                         )
                     }
-                    Icon(painterResource(R.drawable.ds_mic), contentDescription = null, tint = TextMain, modifier = Modifier.padding(end = 8.dp).size(22.dp))
+                    Icon(
+                        painterResource(R.drawable.ds_mic),
+                        contentDescription = "Голос в текст",
+                        tint = TextMain,
+                        modifier = Modifier.padding(end = 8.dp).size(22.dp).clickable { dictate() },
+                    )
                     AnimatedContent(
                         targetState = writing || temporary,
                         transitionSpec = { (fadeIn(tween(180)) + scaleIn(tween(220), initialScale = 0.8f)) togetherWith fadeOut(tween(120)) },
@@ -557,6 +576,14 @@ private fun UserBubble(text: String) {
                     .padding(horizontal = 16.dp, vertical = 10.dp),
             )
         }
+    }
+}
+
+private fun dictationIntent(): Intent {
+    return Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+        putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+        putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ru-RU")
+        putExtra(RecognizerIntent.EXTRA_PROMPT, "Говорите")
     }
 }
 

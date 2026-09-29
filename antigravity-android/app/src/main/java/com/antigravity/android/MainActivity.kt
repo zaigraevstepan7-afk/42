@@ -95,6 +95,17 @@ class MainActivity : ComponentActivity() {
                 else -> "welcome"
             }
             if (phase == "chat" && chats.isEmpty()) current()
+            val current = session
+            if (current != null && current.displayName.isBlank()) {
+                val named = withContext(Dispatchers.IO) {
+                    runCatching { auth.loadProfile(current.accessToken) }.getOrNull()
+                }
+                if (named != null && named.second.isNotBlank()) {
+                    val updated = current.copy(email = named.first.ifBlank { current.email }, displayName = named.second)
+                    store.write(updated)
+                    session = updated
+                }
+            }
         }
 
         loginCallback = { code, err ->
@@ -228,6 +239,7 @@ class MainActivity : ComponentActivity() {
                 if (settings) {
                     SettingsScreen(
                         email = session?.email.orEmpty(),
+                        displayName = session?.displayName.orEmpty(),
                         models = MODELS,
                         model = thread.model,
                         onModel = { thread.model = it },

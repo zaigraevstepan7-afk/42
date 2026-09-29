@@ -47,6 +47,7 @@ import com.antigravity.android.R
 @Composable
 fun SettingsScreen(
     email: String,
+    displayName: String = "",
     onBack: () -> Unit,
     onLogout: () -> Unit,
     models: List<String> = emptyList(),
@@ -58,8 +59,8 @@ fun SettingsScreen(
         DetailPage(page!!, email, models, model, onModel, onLogout) { page = null }
         return
     }
-    val name = email.substringBefore("@").ifBlank { "Google" }
-    val initials = name.take(2).uppercase()
+    val name = displayName.ifBlank { email.substringBefore("@").ifBlank { "Google" } }
+    val initials = profileInitials(displayName, email)
     Column(
         Modifier
             .fillMaxSize()
@@ -79,7 +80,7 @@ fun SettingsScreen(
                 .clickable(onClick = onBack),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(painterResource(R.drawable.ds_back), contentDescription = "Назад", tint = TextMain, modifier = Modifier.size(22.dp))
+            Icon(painterResource(R.drawable.ds_arrow_left), contentDescription = "Назад", tint = TextMain, modifier = Modifier.size(22.dp))
         }
         Column(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Box(contentAlignment = Alignment.BottomEnd) {
@@ -104,16 +105,16 @@ fun SettingsScreen(
         }
         SectionLabel("Мой ChatGPT")
         Group {
-            SettingsRow(painterResource(R.drawable.ds_person), "Персонализация") { page = "Персонализация" }
-            SettingsRow(painterResource(R.drawable.ds_book), "Память") { page = "Память" }
-            SettingsRow(painterResource(R.drawable.ds_plugin), "Плагины") { page = "Плагины" }
+            SettingsRow(painterResource(R.drawable.ds_face), "Персонализация") { page = "Персонализация" }
+            SettingsRow(painterResource(R.drawable.ds_book_open), "Память") { page = "Память" }
+            SettingsRow(painterResource(R.drawable.ds_apps), "Плагины") { page = "Плагины" }
         }
         SectionLabel("Учетная запись")
         Group {
             SettingsRow(painterResource(R.drawable.ds_briefcase), "Рабочая область", "Личное") { page = "Рабочая область" }
             SettingsRow(painterResource(R.drawable.ds_sparkle), "Изменить план", tint = Blue) { page = "Изменить план" }
-            SettingsRow(painterResource(R.drawable.ds_sliders), "Использование и лимиты") { page = "Использование и лимиты" }
-            SettingsRow(painterResource(R.drawable.ds_heart), "Родительский контроль") { page = "Родительский контроль" }
+            SettingsRow(painterResource(R.drawable.ds_chart), "Использование и лимиты") { page = "Использование и лимиты" }
+            SettingsRow(painterResource(R.drawable.ds_parent), "Родительский контроль") { page = "Родительский контроль" }
             SettingsRow(painterResource(R.drawable.ds_mail), "Электронная почта", email.ifBlank { "—" }) { page = "Электронная почта" }
             SettingsRow(painterResource(R.drawable.ds_lock_person), "Проверка возраста") { page = "Проверка возраста" }
         }
@@ -267,7 +268,7 @@ private fun DetailPage(
                 Modifier.size(40.dp).shadow(2.dp, CircleShape).clip(CircleShape).background(White).clickable(onClick = onBack),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(painterResource(R.drawable.ds_back), contentDescription = "Назад", tint = TextMain, modifier = Modifier.size(22.dp))
+                Icon(painterResource(R.drawable.ds_arrow_left), contentDescription = "Назад", tint = TextMain, modifier = Modifier.size(22.dp))
             }
             Text(title, color = TextMain, fontSize = 18.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 12.dp))
         }
@@ -290,6 +291,15 @@ private fun DetailPage(
             }
         }
     }
+}
+
+private fun profileInitials(name: String, email: String): String {
+    val parts = name.split(" ").filter { it.isNotBlank() }
+    val latin = parts.mapNotNull { word -> word.firstOrNull { it in 'A'..'Z' || it in 'a'..'z' } }
+    if (latin.size >= 2) return "${latin[0]}${latin[1]}".uppercase()
+    val fromEmail = email.substringBefore("@").filter { it.isLetter() }.take(2)
+    if (fromEmail.length == 2) return fromEmail.uppercase()
+    return name.take(1).uppercase().ifBlank { "G" }
 }
 
 @Composable

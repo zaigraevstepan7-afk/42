@@ -68,6 +68,7 @@ data class Session(
     val refreshToken: String,
     val expiresAtEpochMs: Long,
     val email: String,
+    val displayName: String = "",
     val projectId: String,
 )
 
@@ -84,6 +85,7 @@ class SessionStore(context: Context) {
                 refreshToken = json.getString("refreshToken"),
                 expiresAtEpochMs = json.getLong("expiresAtEpochMs"),
                 email = json.optString("email"),
+                displayName = json.optString("displayName"),
                 projectId = json.getString("projectId"),
             )
         } catch (_: Exception) {
@@ -98,6 +100,7 @@ class SessionStore(context: Context) {
             .put("refreshToken", session.refreshToken)
             .put("expiresAtEpochMs", session.expiresAtEpochMs)
             .put("email", session.email)
+            .put("displayName", session.displayName)
             .put("projectId", session.projectId)
         file.writeText(json.toString())
     }
@@ -215,13 +218,14 @@ class AntigravityAuthClient(
         val refresh = tokenJson.optString("refresh_token")
         if (refresh.isBlank()) error("Google не вернул refresh token")
         val expiresIn = tokenJson.optLong("expires_in", 3600L)
-        val email = userInfo(access)
+        val profile = userInfo(access)
         val project = resolveProject(access)
         return Session(
             accessToken = access,
             refreshToken = refresh,
             expiresAtEpochMs = System.currentTimeMillis() + expiresIn * 1000L,
-            email = email,
+            email = profile.first,
+            displayName = profile.second,
             projectId = project,
         )
     }
@@ -247,7 +251,9 @@ class AntigravityAuthClient(
         return fresh
     }
 
-    private fun userInfo(access: String): String {
+    fun loadProfile(access: String): Pair<String, String> = userInfo(access)
+
+    private fun userInfo(access: String): Pair<String, String> {
         val request = Request.Builder()
             .url(AntigravityOAuth.USERINFO_ENDPOINT)
             .header("Authorization", "Bearer $access")
@@ -256,7 +262,8 @@ class AntigravityAuthClient(
         http.newCall(request).execute().use { response ->
             val body = response.body?.string().orEmpty()
             if (!response.isSuccessful) error("userinfo ${response.code}: $body")
-            return JSONObject(body).optString("email")
+            val json = JSONObject(body)
+            return json.optString("email") to json.optString("name")
         }
     }
 
