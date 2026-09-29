@@ -382,6 +382,12 @@ fun ChatScreen(
                                 Icon(painterResource(R.drawable.ds_chevron), contentDescription = null, tint = TextMain, modifier = Modifier.padding(start = 4.dp).size(16.dp))
                             }
                         }
+                    } else if (draft.isBlank() && files.isEmpty()) {
+                        Column(Modifier.align(Alignment.BottomCenter).padding(start = 22.dp, end = 22.dp, bottom = bottomInset + 78.dp)) {
+                            SuggestRow(R.drawable.ds_image_spark, "Создать изображение") { draft = "Создать изображение " }
+                            SuggestRow(R.drawable.ds_pencil, "Напиши или отредактируй") { draft = "Напиши или отредактируй " }
+                            SuggestRow(R.drawable.ds_globe2, "Искать в интернете") { draft = "Искать в интернете " }
+                        }
                     }
                 } else {
                     LazyColumn(
@@ -421,10 +427,24 @@ fun ChatScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 CircleIcon(R.drawable.ds_sidebar, "Меню", size = 44.dp) { scope.launch { drawerState.open() } }
-                Spacer(Modifier.weight(1f))
                 if (messages.isEmpty()) {
+                    Spacer(Modifier.width(8.dp))
+                    Row(
+                        Modifier
+                            .height(40.dp)
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(BlueSoft)
+                            .clickable { connect = true }
+                            .padding(horizontal = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(painterResource(R.drawable.ds_sparkle_filled), contentDescription = null, tint = Blue, modifier = Modifier.size(16.dp))
+                        Text("Подключить", color = Blue, fontSize = 15.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 6.dp))
+                    }
+                    Spacer(Modifier.weight(1f))
                     CircleIcon(R.drawable.ds_refresh_loop, "Временный чат", size = 44.dp) { temporary = !temporary }
                 } else {
+                    Spacer(Modifier.weight(1f))
                     CircleIcon(R.drawable.ds_more, "Ещё", shadow = false) { }
                 }
             }
@@ -459,8 +479,8 @@ fun ChatScreen(
                 messages.isNotEmpty() -> "Ответить ChatGPT"
                 else -> "Спросить ChatGPT"
             }
-            val grown = composerFocus || draft.isNotBlank() || stacked
-            val lines = if (grown) composerLines.coerceIn(if (draft.isBlank()) 2 else 1, 8) else 1
+            val grown = stacked || composerLines > 1 && draft.isNotBlank()
+            val lines = if (draft.isBlank()) 1 else composerLines.coerceIn(1, 8)
             Column(
                 Modifier
                     .align(Alignment.BottomCenter)
@@ -500,21 +520,21 @@ fun ChatScreen(
                     }
                 }
                 Row(
-                    Modifier.fillMaxWidth().heightIn(min = if (grown) (lines * 24 + 28).dp else 48.dp),
-                    verticalAlignment = Alignment.Bottom,
+                    Modifier.fillMaxWidth().heightIn(min = if (lines > 1) (lines * 24 + 28).dp else 48.dp),
+                    verticalAlignment = if (lines > 1 || stacked) Alignment.Bottom else Alignment.CenterVertically,
                 ) {
                     Icon(
                         painterResource(R.drawable.ds_plus),
                         contentDescription = "Добавить",
                         tint = TextMain,
-                        modifier = Modifier.padding(start = 10.dp, end = 6.dp, bottom = 13.dp).size(22.dp).clickable { attachMenu = !attachMenu },
+                        modifier = Modifier.padding(start = 10.dp, end = 6.dp, bottom = if (lines > 1) 13.dp else 0.dp).size(22.dp).clickable { attachMenu = !attachMenu },
                     )
                     BasicTextField(
                         value = draft,
                         onValueChange = { draft = it },
                         modifier = Modifier
                             .weight(1f)
-                            .padding(bottom = 12.dp, top = if (grown) 6.dp else 0.dp)
+                            .padding(bottom = if (lines > 1) 12.dp else 0.dp, top = if (lines > 1) 6.dp else 0.dp)
                             .heightIn(min = (lines * 22).dp, max = 176.dp)
                             .onFocusChanged { composerFocus = it.isFocused },
                         textStyle = TextStyle(color = TextMain, fontSize = 17.sp, lineHeight = 22.sp),
@@ -532,7 +552,7 @@ fun ChatScreen(
                         painterResource(R.drawable.ds_mic),
                         contentDescription = "Голос в текст",
                         tint = TextMain,
-                        modifier = Modifier.padding(end = 8.dp, bottom = 13.dp).size(22.dp).clickable(enabled = !busy) { dictate() },
+                        modifier = Modifier.padding(end = 8.dp, bottom = if (lines > 1) 13.dp else 0.dp).size(22.dp).clickable(enabled = !busy) { dictate() },
                     )
                     AnimatedContent(
                         targetState = when {
@@ -545,7 +565,7 @@ fun ChatScreen(
                     ) { slot ->
                         Box(
                             Modifier
-                                .padding(end = 8.dp, bottom = 8.dp)
+                                .padding(end = 8.dp, bottom = if (lines > 1) 8.dp else 0.dp)
                                 .size(32.dp)
                                 .clip(CircleShape)
                                 .background(actionColor)
