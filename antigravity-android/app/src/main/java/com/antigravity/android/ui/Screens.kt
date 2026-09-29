@@ -18,6 +18,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -93,6 +94,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -516,7 +518,7 @@ fun ChatScreen(
                     .heightIn(max = (LocalConfiguration.current.screenHeightDp / 3).dp),
             ) {
                 if (stacked) {
-                    Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 8.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 6.dp, bottom = 4.dp)) {
                         files.forEachIndexed { index, file ->
                             if (file.mime.startsWith("image/")) {
                                 ShotPreview(file.bytes, removable = true) {
@@ -526,19 +528,39 @@ fun ChatScreen(
                                 Text(
                                     file.name,
                                     color = TextMain,
-                                    fontSize = 13.sp,
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.SemiBold,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier
                                         .padding(end = 8.dp)
-                                        .clip(RoundedCornerShape(12.dp))
+                                        .clip(RoundedCornerShape(14.dp))
                                         .background(Bubble)
                                         .clickable { files = files.filterIndexed { i, _ -> i != index } }
-                                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                                        .padding(horizontal = 12.dp, vertical = 8.dp),
                                 )
                             }
                         }
                     }
+                    BasicTextField(
+                        value = draft,
+                        onValueChange = { draft = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp)
+                            .heightIn(min = 52.dp, max = textMax)
+                            .onFocusChanged { composerFocus = it.isFocused },
+                        textStyle = TextStyle(color = TextMain, fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.SemiBold),
+                        cursorBrush = SolidColor(AccentGreen),
+                        maxLines = Int.MAX_VALUE,
+                        onTextLayout = { composerLines = it.lineCount.coerceAtLeast(1) },
+                        decorationBox = { inner ->
+                            if (draft.isEmpty()) {
+                                Text(prompt, color = TextFaint, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                            inner()
+                        },
+                    )
                 }
                 Row(
                     Modifier.fillMaxWidth().heightIn(min = if (lines > 1) (lines * 24 + 28).dp else 48.dp),
@@ -548,27 +570,31 @@ fun ChatScreen(
                         painterResource(R.drawable.ds_plus),
                         contentDescription = "Добавить",
                         tint = TextMain,
-                        modifier = Modifier.padding(start = 10.dp, end = 6.dp, bottom = if (lines > 1) 13.dp else 0.dp).size(22.dp).clickable { attachMenu = !attachMenu },
+                        modifier = Modifier.padding(start = 10.dp, end = 6.dp, bottom = if (lines > 1 || stacked) 13.dp else 0.dp).size(22.dp).clickable { attachMenu = !attachMenu },
                     )
-                    BasicTextField(
-                        value = draft,
-                        onValueChange = { draft = it },
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(bottom = if (lines > 1) 12.dp else 0.dp, top = if (lines > 1) 6.dp else 0.dp)
-                            .heightIn(min = (lines * 22).dp, max = textMax)
-                            .onFocusChanged { composerFocus = it.isFocused },
-                        textStyle = TextStyle(color = TextMain, fontSize = 17.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold),
-                        cursorBrush = SolidColor(AccentGreen),
-                        maxLines = Int.MAX_VALUE,
-                        onTextLayout = { composerLines = it.lineCount.coerceAtLeast(1) },
-                        decorationBox = { inner ->
-                            if (draft.isEmpty()) {
-                                Text(prompt, color = TextFaint, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            }
-                            inner()
-                        },
-                    )
+                    if (!stacked) {
+                        BasicTextField(
+                            value = draft,
+                            onValueChange = { draft = it },
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(bottom = if (lines > 1) 12.dp else 0.dp, top = if (lines > 1) 6.dp else 0.dp)
+                                .heightIn(min = (lines * 24).dp, max = textMax)
+                                .onFocusChanged { composerFocus = it.isFocused },
+                            textStyle = TextStyle(color = TextMain, fontSize = 20.sp, lineHeight = 26.sp, fontWeight = FontWeight.SemiBold),
+                            cursorBrush = SolidColor(AccentGreen),
+                            maxLines = Int.MAX_VALUE,
+                            onTextLayout = { composerLines = it.lineCount.coerceAtLeast(1) },
+                            decorationBox = { inner ->
+                                if (draft.isEmpty()) {
+                                    Text(prompt, color = TextFaint, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                                inner()
+                            },
+                        )
+                    } else {
+                        Spacer(Modifier.weight(1f))
+                    }
                     Icon(
                         painterResource(R.drawable.ds_mic),
                         contentDescription = "Голос в текст",
@@ -617,28 +643,31 @@ fun ChatScreen(
                     }
                 }
             }
-            AnimatedVisibility(
-                visible = attachMenu,
-                enter = fadeIn(tween(160)),
-                exit = fadeOut(tween(140)),
-            ) {
-                Box(Modifier.fillMaxSize().clickable { attachMenu = false })
-            }
-            AnimatedVisibility(
-                visible = attachMenu,
-                modifier = Modifier.align(Alignment.BottomStart),
-                enter = fadeIn(tween(180)) + scaleIn(tween(220), initialScale = 0.92f),
-                exit = fadeOut(tween(140)) + scaleOut(tween(160), targetScale = 0.96f),
-            ) {
+            val menuScale by animateFloatAsState(if (attachMenu) 1f else 0.2f, tween(240, easing = FastOutSlowInEasing), label = "menu-scale")
+            val menuAlpha by animateFloatAsState(if (attachMenu) 1f else 0f, tween(180), label = "menu-alpha")
+            if (attachMenu || menuAlpha > 0.01f) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .graphicsLayer { alpha = menuAlpha }
+                        .clickable(enabled = attachMenu) { attachMenu = false },
+                )
                 Column(
                     Modifier
+                        .align(Alignment.BottomStart)
                         .navigationBarsPadding()
-                        .padding(start = 16.dp, bottom = 74.dp)
-                        .width(280.dp)
+                        .padding(start = sidePad + 6.dp, bottom = 62.dp)
+                        .width(300.dp)
+                        .graphicsLayer {
+                            scaleX = menuScale
+                            scaleY = menuScale
+                            alpha = menuAlpha
+                            transformOrigin = TransformOrigin(0.08f, 1f)
+                        }
                         .shadow(18.dp, RoundedCornerShape(28.dp))
                         .clip(RoundedCornerShape(28.dp))
                         .background(White)
-                        .padding(vertical = 8.dp),
+                        .padding(vertical = 10.dp),
                 ) {
                     AttachRow(R.drawable.ds_camera, "Камера") { cameraPermission.launch(Manifest.permission.CAMERA) }
                     AttachRow(R.drawable.ds_image, "Фото") { pickPhoto.launch("image/*") }
@@ -907,9 +936,9 @@ private fun AnswerMarkdown(text: String, citations: List<Citation>, streaming: B
                 is MdBlock.Paragraph -> Text(
                     inlineMarkdown(block.text),
                     color = TextMain,
-                    fontSize = 16.sp,
+                    fontSize = 20.sp,
                     fontWeight = FontWeight.SemiBold,
-                    lineHeight = 24.sp,
+                    lineHeight = 28.sp,
                     modifier = Modifier.padding(bottom = 10.dp),
                 )
             }
@@ -1051,7 +1080,7 @@ private fun ThinkingDots() {
 @Composable
 private fun ShotPreview(bytes: ByteArray, removable: Boolean, onRemove: () -> Unit = {}) {
     val image = remember(bytes) { decodePreview(bytes) }
-    Box(Modifier.padding(end = 8.dp).size(width = 104.dp, height = 132.dp)) {
+    Box(Modifier.padding(end = 10.dp).size(width = 132.dp, height = 168.dp)) {
         if (image != null) {
             androidx.compose.foundation.Image(
                 bitmap = image,
@@ -1104,9 +1133,9 @@ private fun UserBubble(text: String, sending: Boolean, images: List<ByteArray>) 
                 Text(
                     text,
                     color = TextMain,
-                    fontSize = 16.sp,
+                    fontSize = 20.sp,
                     fontWeight = FontWeight.SemiBold,
-                    lineHeight = 22.sp,
+                    lineHeight = 26.sp,
                     modifier = Modifier
                         .padding(top = if (images.isEmpty()) 0.dp else 6.dp)
                         .widthIn(max = 300.dp)
@@ -1227,25 +1256,25 @@ private fun CircleIcon(
 
 @Composable
 private fun SideRow(icon: Int, title: String) {
-    Row(Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(painterResource(icon), contentDescription = null, tint = TextMain, modifier = Modifier.size(22.dp))
-        Text(title, color = TextMain, fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 15.dp))
+        Text(title, color = TextMain, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 15.dp))
     }
 }
 
 @Composable
 private fun AttachRow(icon: Int, title: String, checked: Boolean = false, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().height(56.dp).clickable(onClick = onClick).padding(horizontal = 14.dp),
+        Modifier.fillMaxWidth().height(64.dp).clickable(onClick = onClick).padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
-            Modifier.size(40.dp).clip(CircleShape).background(if (checked) BlueSoft else PlusGray),
+            Modifier.size(48.dp).clip(CircleShape).background(if (checked) BlueSoft else PlusGray),
             contentAlignment = Alignment.Center,
         ) {
             Icon(painterResource(icon), contentDescription = null, tint = if (checked) Blue else TextMain, modifier = Modifier.size(20.dp))
         }
-        Text(title, color = TextMain, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 14.dp).weight(1f))
+        Text(title, color = TextMain, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 14.dp).weight(1f))
         if (checked) Text("✓", color = Blue, fontSize = 16.sp)
     }
 }
@@ -1277,6 +1306,6 @@ private fun SuggestRow(icon: Int, title: String, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(painterResource(icon), contentDescription = null, tint = TextDim, modifier = Modifier.size(22.dp))
-        Text(title, color = TextMain, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 14.dp))
+        Text(title, color = TextMain, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 14.dp))
     }
 }

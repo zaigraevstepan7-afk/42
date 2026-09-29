@@ -322,7 +322,7 @@ private fun SettingsRow(
     ) {
         Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
         Column(Modifier.weight(1f).padding(start = 14.dp)) {
-            Text(title, color = tint, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            Text(title, color = tint, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
             if (value != null && title == "Акцентный цвет") {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(8.dp).clip(CircleShape).background(Blue))
