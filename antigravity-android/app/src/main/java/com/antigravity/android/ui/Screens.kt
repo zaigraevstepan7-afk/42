@@ -178,6 +178,7 @@ fun ChatScreen(
     val scope = rememberCoroutineScope()
     var draft by remember { mutableStateOf("") }
     var sheet by remember { mutableStateOf(false) }
+    var connect by remember { mutableStateOf(false) }
     var temporary by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val hazeState = rememberHazeState()
@@ -310,7 +311,7 @@ fun ChatScreen(
                     Modifier
                         .clip(RoundedCornerShape(20.dp))
                         .background(BlueSoft)
-                        .clickable { sheet = true }
+                        .clickable { connect = true }
                         .padding(horizontal = 14.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -405,6 +406,13 @@ fun ChatScreen(
         }
     }
 
+    if (connect) {
+        ModalBottomSheet(onDismissRequest = { connect = false }, containerColor = White, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+            Text("Подключить", color = TextMain, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+            Text("Подключите приложения, чтобы пользоваться ими в чате.", color = TextDim, fontSize = 16.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+            Spacer(Modifier.height(24.dp))
+        }
+    }
     if (sheet) {
         ModalBottomSheet(
             onDismissRequest = { sheet = false },

@@ -227,6 +227,9 @@ class MainActivity : ComponentActivity() {
                 if (settings) {
                     SettingsScreen(
                         email = session?.email.orEmpty(),
+                        models = MODELS,
+                        model = thread.model,
+                        onModel = { thread.model = it },
                         onBack = { settings = false },
                         onLogout = {
                             store.clear()

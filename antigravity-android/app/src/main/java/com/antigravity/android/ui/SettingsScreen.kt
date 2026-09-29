@@ -20,6 +20,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -32,7 +36,19 @@ import androidx.compose.ui.unit.sp
 import com.antigravity.android.R
 
 @Composable
-fun SettingsScreen(email: String, onBack: () -> Unit, onLogout: () -> Unit) {
+fun SettingsScreen(
+    email: String,
+    onBack: () -> Unit,
+    onLogout: () -> Unit,
+    models: List<String> = emptyList(),
+    model: String = "",
+    onModel: (String) -> Unit = {},
+) {
+    var page by rememberSaveable { mutableStateOf<String?>(null) }
+    if (page != null) {
+        DetailPage(page!!, email, models, model, onModel, onLogout) { page = null }
+        return
+    }
     val name = email.substringBefore("@").ifBlank { "Google" }
     val initials = name.take(2).uppercase()
     Column(
@@ -79,38 +95,38 @@ fun SettingsScreen(email: String, onBack: () -> Unit, onLogout: () -> Unit) {
         }
         SectionLabel("Мой ChatGPT")
         Group {
-            SettingsRow(painterResource(R.drawable.ds_person), "Персонализация")
-            SettingsRow(painterResource(R.drawable.ds_book), "Память")
-            SettingsRow(painterResource(R.drawable.ds_plugin), "Плагины")
+            SettingsRow(painterResource(R.drawable.ds_person), "Персонализация") { page = "Персонализация" }
+            SettingsRow(painterResource(R.drawable.ds_book), "Память") { page = "Память" }
+            SettingsRow(painterResource(R.drawable.ds_plugin), "Плагины") { page = "Плагины" }
         }
         SectionLabel("Учетная запись")
         Group {
-            SettingsRow(painterResource(R.drawable.ds_briefcase), "Рабочая область", "Личное")
-            SettingsRow(painterResource(R.drawable.ds_sparkle), "Изменить план", tint = Blue)
-            SettingsRow(painterResource(R.drawable.ds_sliders), "Использование и лимиты")
-            SettingsRow(painterResource(R.drawable.ds_heart), "Родительский контроль")
-            SettingsRow(painterResource(R.drawable.ds_mail), "Электронная почта", email.ifBlank { "—" })
-            SettingsRow(painterResource(R.drawable.ds_lock_person), "Проверка возраста")
+            SettingsRow(painterResource(R.drawable.ds_briefcase), "Рабочая область", "Личное") { page = "Рабочая область" }
+            SettingsRow(painterResource(R.drawable.ds_sparkle), "Изменить план", tint = Blue) { page = "Изменить план" }
+            SettingsRow(painterResource(R.drawable.ds_sliders), "Использование и лимиты") { page = "Использование и лимиты" }
+            SettingsRow(painterResource(R.drawable.ds_heart), "Родительский контроль") { page = "Родительский контроль" }
+            SettingsRow(painterResource(R.drawable.ds_mail), "Электронная почта", email.ifBlank { "—" }) { page = "Электронная почта" }
+            SettingsRow(painterResource(R.drawable.ds_lock_person), "Проверка возраста") { page = "Проверка возраста" }
         }
         Spacer(Modifier.height(12.dp))
         Group {
-            SettingsRow(painterResource(R.drawable.ds_sun), "Внешний вид", caret = true)
-            SettingsRow(painterResource(R.drawable.ds_palette), "Акцентный цвет", "Синий", caret = true)
+            SettingsRow(painterResource(R.drawable.ds_sun), "Внешний вид", caret = true) { page = "Внешний вид" }
+            SettingsRow(painterResource(R.drawable.ds_palette), "Акцентный цвет", "Синий", caret = true) { page = "Акцентный цвет" }
         }
         Spacer(Modifier.height(12.dp))
         Group {
-            SettingsRow(painterResource(R.drawable.ds_gear), "Общие")
-            SettingsRow(painterResource(R.drawable.ds_bell), "Уведомления")
-            SettingsRow(painterResource(R.drawable.ds_voice), "Голос")
-            SettingsRow(painterResource(R.drawable.ds_shield), "Безопасность и благополучие")
-            SettingsRow(painterResource(R.drawable.ds_lock_person), "Безопасность и вход")
-            SettingsRow(painterResource(R.drawable.ds_remote), "Удаленное управление")
-            SettingsRow(painterResource(R.drawable.ds_storage), "Хранилище")
-            SettingsRow(painterResource(R.drawable.ds_shield), "Центр конфиденциальности")
-            SettingsRow(painterResource(R.drawable.ds_storage), "Управление данными")
-            SettingsRow(painterResource(R.drawable.ds_megaphone), "Управление рекламой")
-            SettingsRow(painterResource(R.drawable.ds_bug), "Сообщить об ошибке")
-            SettingsRow(painterResource(R.drawable.ds_info), "Информация")
+            SettingsRow(painterResource(R.drawable.ds_gear), "Общие") { page = "Общие" }
+            SettingsRow(painterResource(R.drawable.ds_bell), "Уведомления") { page = "Уведомления" }
+            SettingsRow(painterResource(R.drawable.ds_voice), "Голос") { page = "Голос" }
+            SettingsRow(painterResource(R.drawable.ds_shield), "Безопасность и благополучие") { page = "Безопасность и благополучие" }
+            SettingsRow(painterResource(R.drawable.ds_lock_person), "Безопасность и вход") { page = "Безопасность и вход" }
+            SettingsRow(painterResource(R.drawable.ds_remote), "Удаленное управление") { page = "Удаленное управление" }
+            SettingsRow(painterResource(R.drawable.ds_storage), "Хранилище") { page = "Хранилище" }
+            SettingsRow(painterResource(R.drawable.ds_shield), "Центр конфиденциальности") { page = "Центр конфиденциальности" }
+            SettingsRow(painterResource(R.drawable.ds_storage), "Управление данными") { page = "Управление данными" }
+            SettingsRow(painterResource(R.drawable.ds_megaphone), "Управление рекламой") { page = "Управление рекламой" }
+            SettingsRow(painterResource(R.drawable.ds_bug), "Сообщить об ошибке") { page = "Сообщить об ошибке" }
+            SettingsRow(painterResource(R.drawable.ds_info), "Информация") { page = "Информация" }
         }
         Spacer(Modifier.height(12.dp))
         Row(
@@ -142,15 +158,62 @@ private fun Group(content: @Composable () -> Unit) {
 }
 
 @Composable
+private fun DetailPage(
+    title: String,
+    email: String,
+    models: List<String>,
+    model: String,
+    onModel: (String) -> Unit,
+    onLogout: () -> Unit,
+    onBack: () -> Unit,
+) {
+    Column(Modifier.fillMaxSize().background(Page).statusBarsPadding().navigationBarsPadding()) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(40.dp).shadow(2.dp, CircleShape).clip(CircleShape).background(White).clickable(onClick = onBack),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(painterResource(R.drawable.ds_back), contentDescription = "Назад", tint = TextMain, modifier = Modifier.size(22.dp))
+            }
+            Text(title, color = TextMain, fontSize = 18.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 12.dp))
+        }
+        Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp)) {
+            when (title) {
+                "Использование и лимиты" -> models.forEach { item ->
+                    Row(
+                        Modifier.fillMaxWidth().height(52.dp).clip(RoundedCornerShape(12.dp)).clickable { onModel(item) },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(item, color = TextMain, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                        if (item == model) Text("✓", color = Blue, fontSize = 16.sp)
+                    }
+                }
+                "Внешний вид" -> Text("Система (по умолчанию)", color = TextMain, fontSize = 16.sp)
+                "Акцентный цвет" -> Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(8.dp).clip(CircleShape).background(Blue))
+                    Text("Синий", color = TextMain, fontSize = 16.sp, modifier = Modifier.padding(start = 8.dp))
+                }
+                "Электронная почта" -> Text(email.ifBlank { "—" }, color = TextMain, fontSize = 16.sp)
+                "Голос" -> Text("Разрешите доступ к микрофону в системных настройках, чтобы использовать Голос.", color = TextDim, fontSize = 16.sp, lineHeight = 22.sp)
+                "Управление данными" -> Text("Чтобы экспортировать свои данные, откройте ChatGPT в браузере. Там вы сможете запросить и скачать свои данные.", color = TextDim, fontSize = 16.sp, lineHeight = 22.sp)
+                "Выйти" -> Text("Выйти", color = Logout, fontSize = 16.sp, modifier = Modifier.clickable(onClick = onLogout))
+                else -> Text(title, color = TextDim, fontSize = 16.sp)
+            }
+        }
+    }
+}
+
+@Composable
 private fun SettingsRow(
     icon: Painter,
     title: String,
     value: String? = null,
     tint: androidx.compose.ui.graphics.Color = TextMain,
     caret: Boolean = false,
+    onClick: () -> Unit = {},
 ) {
     Row(
-        Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 16.dp),
+        Modifier.fillMaxWidth().height(52.dp).clickable(onClick = onClick).padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
