@@ -1,5 +1,10 @@
 package com.antigravity.android.ui
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -69,15 +74,32 @@ fun Blossom(modifier: Modifier = Modifier, size: androidx.compose.ui.unit.Dp = 3
 
 @Composable
 fun WelcomeScreen(busy: Boolean, error: String?, onGoogle: () -> Unit) {
-    Box(Modifier.fillMaxSize().background(Canvas).statusBarsPadding().navigationBarsPadding()) {
-        Column(
-            Modifier.align(Alignment.Center).padding(bottom = 80.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Blossom(size = 48.dp)
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(Canvas)
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .padding(horizontal = 24.dp, vertical = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(32.dp),
+            ) {
+                Blossom(size = 64.dp)
+                Icon(
+                    painter = painterResource(R.drawable.design_logo_chatgpt),
+                    contentDescription = "ChatGPT",
+                    tint = White,
+                    modifier = Modifier.height(24.dp).width(137.45.dp),
+                )
+            }
         }
         Column(
-            Modifier.align(Alignment.BottomCenter).padding(horizontal = 20.dp, vertical = 28.dp),
+            Modifier.fillMaxWidth().widthIn(max = 640.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Row(
@@ -87,16 +109,16 @@ fun WelcomeScreen(busy: Boolean, error: String?, onGoogle: () -> Unit) {
                     .clip(RoundedCornerShape(24.dp))
                     .background(White)
                     .clickable(enabled = !busy, onClick = onGoogle)
-                    .padding(horizontal = 16.dp),
+                    .padding(horizontal = 24.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center,
             ) {
                 Image(
                     painter = painterResource(R.drawable.design_logo_google),
                     contentDescription = null,
-                    modifier = Modifier.size(18.dp),
+                    modifier = Modifier.size(21.dp),
                 )
-                Spacer(Modifier.width(10.dp))
+                Spacer(Modifier.width(8.dp))
                 Text(
                     if (busy) "Вход…" else "Продолжить с Google",
                     color = Black,
@@ -105,15 +127,8 @@ fun WelcomeScreen(busy: Boolean, error: String?, onGoogle: () -> Unit) {
                 )
             }
             if (!error.isNullOrBlank()) {
-                Spacer(Modifier.height(12.dp))
                 Text(error, color = Color(0xFFFF8A80), fontSize = 13.sp)
             }
-            Spacer(Modifier.height(14.dp))
-            Text(
-                "На странице Google нажмите Sign in.",
-                color = TextFaint,
-                fontSize = 12.sp,
-            )
         }
     }
 }
@@ -189,7 +204,7 @@ fun ChatScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
-                    painter = painterResource(R.drawable.sidebar),
+                    painter = painterResource(R.drawable.ds_sidebar),
                     contentDescription = "Меню",
                     tint = TextMain,
                     modifier = Modifier
@@ -204,14 +219,14 @@ fun ChatScreen(
                 ) {
                     Text("ChatGPT", color = TextMain, fontSize = 16.sp, fontWeight = FontWeight.Medium)
                     Icon(
-                        painter = painterResource(R.drawable.chevron_down),
+                        painter = painterResource(R.drawable.ds_chevron),
                         contentDescription = null,
                         tint = TextDim,
                         modifier = Modifier.padding(start = 4.dp).size(12.dp),
                     )
                 }
                 Icon(
-                    painter = painterResource(R.drawable.pencil),
+                    painter = painterResource(R.drawable.ds_new_chat),
                     contentDescription = "Новый чат",
                     tint = TextMain,
                     modifier = Modifier
@@ -268,7 +283,7 @@ fun ChatScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
-                    painter = painterResource(R.drawable.plus),
+                    painter = painterResource(R.drawable.ds_plus),
                     contentDescription = null,
                     tint = TextMain,
                     modifier = Modifier.padding(10.dp).size(22.dp),
@@ -285,39 +300,47 @@ fun ChatScreen(
                         inner()
                     },
                 )
-                if (draft.isBlank()) {
-                    Icon(
-                        painter = painterResource(R.drawable.mic_filled),
-                        contentDescription = null,
-                        tint = TextMain,
-                        modifier = Modifier.padding(horizontal = 6.dp).size(22.dp),
-                    )
-                    Icon(
-                        painter = painterResource(R.drawable.voice_button),
-                        contentDescription = null,
-                        tint = TextMain,
-                        modifier = Modifier.padding(start = 2.dp, end = 10.dp).size(22.dp),
-                    )
-                } else {
-                    Box(
-                        Modifier
-                            .padding(6.dp)
-                            .size(32.dp)
-                            .clip(CircleShape)
-                            .background(White)
-                            .clickable(enabled = !busy) {
-                                val text = draft.trim()
-                                draft = ""
-                                onSend(text)
-                            },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.arrow_up),
-                            contentDescription = null,
-                            tint = Color.Unspecified,
-                            modifier = Modifier.size(16.dp),
-                        )
+                AnimatedContent(
+                    targetState = draft.isBlank(),
+                    transitionSpec = { fadeIn(tween(150)) togetherWith fadeOut(tween(150)) },
+                    label = "composer-trailing",
+                ) { empty ->
+                    if (empty) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                painter = painterResource(R.drawable.mic_filled),
+                                contentDescription = null,
+                                tint = TextMain,
+                                modifier = Modifier.padding(horizontal = 6.dp).size(22.dp),
+                            )
+                            Icon(
+                                painter = painterResource(R.drawable.voice_button),
+                                contentDescription = null,
+                                tint = TextMain,
+                                modifier = Modifier.padding(start = 2.dp, end = 10.dp).size(22.dp),
+                            )
+                        }
+                    } else {
+                        Box(
+                            Modifier
+                                .padding(6.dp)
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(White)
+                                .clickable(enabled = !busy) {
+                                    val text = draft.trim()
+                                    draft = ""
+                                    onSend(text)
+                                },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ds_arrow_up),
+                                contentDescription = null,
+                                tint = Black,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
                     }
                 }
             }
