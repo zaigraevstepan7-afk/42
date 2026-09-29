@@ -12,6 +12,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -181,6 +183,7 @@ fun ChatScreen(
     var draft by remember { mutableStateOf("") }
     var sheet by remember { mutableStateOf(false) }
     var connect by remember { mutableStateOf(false) }
+    var expanded by remember { mutableStateOf(false) }
     var temporary by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val hazeState = rememberHazeState()
@@ -270,7 +273,7 @@ fun ChatScreen(
                                 Icon(painterResource(R.drawable.ds_chevron), contentDescription = null, tint = TextMain, modifier = Modifier.padding(start = 4.dp).size(16.dp))
                             }
                         }
-                    } else {
+                    } else if (draft.isBlank()) {
                         Column(Modifier.align(Alignment.BottomCenter).padding(start = 22.dp, end = 22.dp, bottom = bottomInset + 108.dp)) {
                             SuggestRow(R.drawable.ds_image_spark, "Создать изображение") { draft = "Создать изображение " }
                             SuggestRow(R.drawable.ds_pencil, "Напиши или отредактируй") { draft = "Напиши или отредактируй " }
@@ -343,83 +346,106 @@ fun ChatScreen(
                     .height(140.dp)
                     .background(Brush.verticalGradient(listOf(Color.Transparent, Canvas))),
             )
-            Row(
+            val writing = draft.isNotBlank()
+            Column(
                 Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
                     .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
                     .fillMaxWidth()
-                    .height(52.dp)
-                    .clip(RoundedCornerShape(26.dp))
-                    .border(1.dp, Color(0xFFE6E6E6), RoundedCornerShape(26.dp))
+                    .animateContentSize(tween(280, easing = FastOutSlowInEasing))
+                    .clip(RoundedCornerShape(if (writing) 24.dp else 26.dp))
+                    .border(1.dp, Color(0xFFE6E6E6), RoundedCornerShape(if (writing) 24.dp else 26.dp))
                     .background(Composer)
-                    .padding(start = 6.dp, end = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                    .padding(horizontal = 6.dp, vertical = if (writing) 8.dp else 0.dp),
             ) {
-                Icon(painterResource(R.drawable.ds_plus), contentDescription = null, tint = TextMain, modifier = Modifier.padding(horizontal = 8.dp).size(22.dp))
-                BasicTextField(
-                    value = draft,
-                    onValueChange = { draft = it },
-                    modifier = Modifier.weight(1f),
-                    textStyle = TextStyle(color = TextMain, fontSize = 16.sp),
-                    cursorBrush = SolidColor(Blue),
-                    singleLine = true,
-                    decorationBox = { inner ->
-                        if (draft.isEmpty()) {
-                            Text(
-                                if (temporary) "Временный чат" else "Спросить ChatGPT",
-                                color = TextFaint,
-                                fontSize = 16.sp,
-                                maxLines = 1,
-                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                            )
-                        }
-                        inner()
-                    },
-                )
-                AnimatedContent(
-                    targetState = draft.isBlank() && !temporary,
-                    transitionSpec = { fadeIn(tween(150)) togetherWith fadeOut(tween(150)) },
-                    label = "composer-trailing",
-                ) { empty ->
-                    if (empty && !temporary) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                painter = painterResource(R.drawable.ds_mic),
-                                contentDescription = null,
-                                tint = TextMain,
-                                modifier = Modifier.padding(horizontal = 8.dp).size(22.dp),
-                            )
-                            Box(
-                                Modifier.padding(end = 2.dp).size(34.dp).clip(CircleShape).background(Blue),
-                                contentAlignment = Alignment.Center,
-                            ) {
+                AnimatedVisibility(visible = writing, enter = fadeIn(tween(180)) + slideInVertically { it / 3 }, exit = fadeOut(tween(120))) {
+                    BasicTextField(
+                        value = draft,
+                        onValueChange = { draft = it },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp, max = 160.dp).padding(start = 10.dp, top = 6.dp, end = 10.dp, bottom = 4.dp),
+                        textStyle = TextStyle(color = TextMain, fontSize = 16.sp, lineHeight = 22.sp),
+                        cursorBrush = SolidColor(Blue),
+                        maxLines = 8,
+                    )
+                }
+                Row(Modifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(painterResource(R.drawable.ds_plus), contentDescription = null, tint = TextMain, modifier = Modifier.padding(horizontal = 8.dp).size(22.dp))
+                    if (!writing) {
+                        BasicTextField(
+                            value = draft,
+                            onValueChange = { draft = it },
+                            modifier = Modifier.weight(1f),
+                            textStyle = TextStyle(color = TextMain, fontSize = 16.sp),
+                            cursorBrush = SolidColor(Blue),
+                            singleLine = true,
+                            decorationBox = { inner ->
+                                if (draft.isEmpty()) {
+                                    Text(
+                                        if (temporary) "Временный чат" else "Спросить ChatGPT",
+                                        color = TextFaint,
+                                        fontSize = 16.sp,
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                    )
+                                }
+                                inner()
+                            },
+                        )
+                    } else {
+                        Spacer(Modifier.weight(1f))
+                        Icon(
+                            painterResource(R.drawable.ds_expand),
+                            contentDescription = "На весь экран",
+                            tint = TextMain,
+                            modifier = Modifier.padding(end = 10.dp).size(22.dp).clickable { expanded = true },
+                        )
+                    }
+                    Icon(painterResource(R.drawable.ds_mic), contentDescription = null, tint = TextMain, modifier = Modifier.padding(end = 8.dp).size(22.dp))
+                    AnimatedContent(
+                        targetState = writing || temporary,
+                        transitionSpec = { (fadeIn(tween(180)) + scaleIn(tween(220), initialScale = 0.8f)) togetherWith fadeOut(tween(120)) },
+                        label = "send-slot",
+                    ) { showSend ->
+                        if (!showSend) {
+                            Box(Modifier.padding(end = 2.dp).size(34.dp).clip(CircleShape).background(Blue), contentAlignment = Alignment.Center) {
                                 Icon(painterResource(R.drawable.voice_button), contentDescription = null, tint = White, modifier = Modifier.size(18.dp))
                             }
-                        }
-                    } else {
-                        Box(
-                            Modifier
-                                .padding(6.dp)
-                                .size(32.dp)
-                            .clip(CircleShape)
-                            .background(if (draft.isBlank()) Card else Blue)
-                                .clickable(enabled = !busy) {
-                                    val text = draft.trim()
-                                    draft = ""
-                                    onSend(text)
-                                },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                painter = painterResource(R.drawable.ds_arrow_up),
-                                contentDescription = null,
-                                tint = if (draft.isBlank()) TextDim else White,
-                                modifier = Modifier.size(18.dp),
-                            )
+                        } else {
+                            Box(
+                                Modifier
+                                    .padding(end = 2.dp)
+                                    .size(34.dp)
+                                    .clip(CircleShape)
+                                    .background(Blue)
+                                    .clickable(enabled = draft.isNotBlank() && !busy) {
+                                        val text = draft.trim()
+                                        draft = ""
+                                        expanded = false
+                                        onSend(text)
+                                    },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(painterResource(R.drawable.ds_arrow_up), contentDescription = "Отправить", tint = White, modifier = Modifier.size(18.dp))
+                            }
                         }
                     }
                 }
+            }
+            if (expanded) {
+                ExpandedComposer(
+                    text = draft,
+                    onText = { draft = it },
+                    onClose = { expanded = false },
+                    onSend = {
+                        val text = draft.trim()
+                        if (text.isNotEmpty() && !busy) {
+                            draft = ""
+                            expanded = false
+                            onSend(text)
+                        }
+                    },
+                )
             }
         }
     }
@@ -524,6 +550,37 @@ private fun UserBubble(text: String) {
                     .background(Bubble)
                     .padding(horizontal = 16.dp, vertical = 10.dp),
             )
+        }
+    }
+}
+
+@Composable
+private fun ExpandedComposer(text: String, onText: (String) -> Unit, onClose: () -> Unit, onSend: () -> Unit) {
+    Box(Modifier.fillMaxSize().background(White).statusBarsPadding().imePadding().navigationBarsPadding()) {
+        BasicTextField(
+            value = text,
+            onValueChange = onText,
+            modifier = Modifier.fillMaxSize().padding(start = 20.dp, end = 20.dp, top = 28.dp, bottom = 88.dp),
+            textStyle = TextStyle(color = TextMain, fontSize = 18.sp, lineHeight = 26.sp),
+            cursorBrush = SolidColor(Blue),
+        )
+        Icon(
+            painterResource(R.drawable.ds_expand),
+            contentDescription = "Свернуть",
+            tint = TextMain,
+            modifier = Modifier.align(Alignment.TopEnd).padding(16.dp).size(22.dp).clickable(onClick = onClose),
+        )
+        Box(
+            Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 20.dp, bottom = 16.dp)
+                .size(52.dp)
+                .clip(CircleShape)
+                .background(Black)
+                .clickable(onClick = onSend),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(painterResource(R.drawable.ds_arrow_up), contentDescription = "Отправить", tint = White, modifier = Modifier.size(22.dp))
         }
     }
 }
