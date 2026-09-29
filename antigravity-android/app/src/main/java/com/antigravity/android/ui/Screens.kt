@@ -6,7 +6,10 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Bundle
+import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
@@ -214,12 +217,12 @@ fun ChatScreen(
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     var draft by remember { mutableStateOf("") }
-    val speech = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        val spoken = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull().orEmpty()
-        if (spoken.isNotBlank()) draft = if (draft.isBlank()) spoken else "$draft $spoken"
-    }
     val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) speech.launch(dictationIntent())
+        if (granted) {
+            startDictation(context) { spoken ->
+                draft = if (draft.isBlank()) spoken else "$draft $spoken"
+            }
+        }
     }
     val dictate = {
         micPermission.launch(Manifest.permission.RECORD_AUDIO)
@@ -243,12 +246,12 @@ fun ChatScreen(
             ModalDrawerSheet(
                 drawerContainerColor = Sidebar,
                 drawerShape = RoundedCornerShape(0.dp),
-                modifier = Modifier.fillMaxWidth(0.84f),
+                modifier = Modifier.fillMaxWidth(0.80f),
             ) {
-                Column(Modifier.fillMaxHeight().statusBarsPadding().navigationBarsPadding().padding(horizontal = 20.dp)) {
-                    Row(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 18.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("ChatGPT", color = TextMain, fontSize = 32.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                        CircleIcon(R.drawable.ds_search, "Поиск") {}
+                Column(Modifier.fillMaxHeight().statusBarsPadding().navigationBarsPadding().padding(horizontal = 32.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 22.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("ChatGPT", color = TextMain, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                        CircleIcon(R.drawable.ds_search, "Поиск", size = 44.dp, iconSize = 26.dp) {}
                     }
                     SideRow(R.drawable.ds_image, "Изображения")
                     SideRow(R.drawable.ds_library, "Библиотека")
@@ -275,28 +278,26 @@ fun ChatScreen(
                             )
                         }
                     }
-                    Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Row(
-                            Modifier.clip(RoundedCornerShape(22.dp)).background(Blue).clickable {
-                                scope.launch { drawerState.close() }
-                                onNewChat()
-                            }.padding(horizontal = 16.dp, vertical = 10.dp),
+                            Modifier
+                                .height(48.dp)
+                                .clip(RoundedCornerShape(24.dp))
+                                .background(Blue)
+                                .clickable {
+                                    scope.launch { drawerState.close() }
+                                    onNewChat()
+                                }
+                                .padding(horizontal = 18.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Icon(painterResource(R.drawable.ds_chat), contentDescription = null, tint = White, modifier = Modifier.size(18.dp))
-                            Text("Чат", color = White, fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 8.dp))
+                            Icon(painterResource(R.drawable.ds_chat), contentDescription = null, tint = White, modifier = Modifier.size(20.dp))
+                            Text("Чат", color = White, fontSize = 17.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 8.dp))
                         }
                         Spacer(Modifier.weight(1f))
-                        CircleIcon(R.drawable.ds_gear, "Настройки") {
+                        CircleIcon(R.drawable.ds_gear, "Настройки", size = 44.dp, iconSize = 22.dp) {
                             scope.launch { drawerState.close() }
                             onSettings()
-                        }
-                        Spacer(Modifier.width(8.dp))
-                        Box(
-                            Modifier.size(44.dp).clip(CircleShape).background(Blue),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(painterResource(R.drawable.voice_button), contentDescription = "Голос", tint = White, modifier = Modifier.size(20.dp))
                         }
                     }
                 }
@@ -848,12 +849,33 @@ private fun UserBubble(text: String, sending: Boolean) {
     }
 }
 
-private fun dictationIntent(): Intent {
-    return Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+private fun startDictation(context: Context, onText: (String) -> Unit) {
+    if (!SpeechRecognizer.isRecognitionAvailable(context)) return
+    val recognizer = SpeechRecognizer.createSpeechRecognizer(context)
+    val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
         putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
         putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ru-RU")
-        putExtra(RecognizerIntent.EXTRA_PROMPT, "Говорите")
+        putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
+        putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
     }
+    recognizer.setRecognitionListener(object : RecognitionListener {
+        override fun onResults(results: Bundle) {
+            val spoken = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
+            if (spoken.isNotBlank()) onText(spoken)
+            recognizer.destroy()
+        }
+        override fun onError(error: Int) {
+            recognizer.destroy()
+        }
+        override fun onReadyForSpeech(params: Bundle) = Unit
+        override fun onBeginningOfSpeech() = Unit
+        override fun onRmsChanged(rmsdB: Float) = Unit
+        override fun onBufferReceived(buffer: ByteArray) = Unit
+        override fun onEndOfSpeech() = Unit
+        override fun onPartialResults(partialResults: Bundle) = Unit
+        override fun onEvent(eventType: Int, params: Bundle) = Unit
+    })
+    recognizer.startListening(intent)
 }
 
 private fun copyText(context: Context, text: String) {
@@ -909,25 +931,32 @@ private fun ExpandedComposer(text: String, onText: (String) -> Unit, onClose: ()
 }
 
 @Composable
-private fun CircleIcon(icon: Int, label: String, shadow: Boolean = true, onClick: () -> Unit) {
+private fun CircleIcon(
+    icon: Int,
+    label: String,
+    shadow: Boolean = true,
+    size: androidx.compose.ui.unit.Dp = 44.dp,
+    iconSize: androidx.compose.ui.unit.Dp = 20.dp,
+    onClick: () -> Unit,
+) {
     Box(
         Modifier
-            .size(44.dp)
+            .size(size)
             .then(if (shadow) Modifier.shadow(2.dp, CircleShape) else Modifier)
             .clip(CircleShape)
             .background(White)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(painterResource(icon), contentDescription = label, tint = TextMain, modifier = Modifier.size(20.dp))
+        Icon(painterResource(icon), contentDescription = label, tint = TextMain, modifier = Modifier.size(iconSize))
     }
 }
 
 @Composable
 private fun SideRow(icon: Int, title: String) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(painterResource(icon), contentDescription = null, tint = TextMain, modifier = Modifier.size(22.dp))
-        Text(title, color = TextMain, fontSize = 16.sp, modifier = Modifier.padding(start = 14.dp))
+    Row(Modifier.fillMaxWidth().padding(vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(painterResource(icon), contentDescription = null, tint = TextMain, modifier = Modifier.size(26.dp))
+        Text(title, color = TextMain, fontSize = 17.sp, modifier = Modifier.padding(start = 16.dp))
     }
 }
 
