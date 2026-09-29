@@ -307,10 +307,14 @@ class MainActivity : ComponentActivity() {
                         .put("contents", thread.contents)
                         .put(
                             "generationConfig",
-                            JSONObject().put(
-                                "thinkingConfig",
-                                JSONObject().put("includeThoughts", true),
-                            ),
+                            JSONObject()
+                                .put("maxOutputTokens", 65536)
+                                .put(
+                                    "thinkingConfig",
+                                    JSONObject()
+                                        .put("includeThoughts", true)
+                                        .put("thinkingBudget", 32768),
+                                ),
                         )
                         .put("tools", agentTools())
                         .put("sessionId", thread.sessionId)
@@ -629,7 +633,7 @@ private fun systemInstruction(): JSONObject {
         Не выдумывай источники. В ответе упоминай названия сайтов из результатов поиска.
         Файлы, команды и загрузки делай инструментами list_dir, read_file, write_file, exec, download.
         Пути абсолютные. Не выдумывай вывод команд.
-        Форматируй ответ markdown: сначала короткий абзац, затем жирный заголовок, затем абзацы.
+        Форматируй ответ markdown. Доводи мысль до конца, не обрывай текст на полуслове и не сокращай ответ из-за длины.
     """.trimIndent()
     return JSONObject().put("parts", JSONArray().put(JSONObject().put("text", text)))
 }
