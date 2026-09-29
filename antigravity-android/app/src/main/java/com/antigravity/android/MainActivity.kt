@@ -187,6 +187,7 @@ class MainActivity : ComponentActivity() {
                 val thread = chats.firstOrNull { it.id == currentId } ?: current()
                 ChatScreen(
                     email = session?.email.orEmpty(),
+                    displayName = session?.displayName.orEmpty(),
                     model = thread.model,
                     models = MODELS,
                     messages = thread.messages,

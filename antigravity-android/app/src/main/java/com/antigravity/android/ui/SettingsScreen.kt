@@ -26,6 +26,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.runtime.Composable
@@ -69,40 +70,42 @@ fun SettingsScreen(
             .statusBarsPadding()
             .navigationBarsPadding()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 26.dp),
     ) {
-        Box(
-            Modifier
-                .padding(top = 8.dp)
-                .size(40.dp)
-                .shadow(2.dp, CircleShape)
-                .clip(CircleShape)
-                .background(White)
-                .clickable(onClick = onBack),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(painterResource(R.drawable.ds_arrow_left), contentDescription = "Назад", tint = TextMain, modifier = Modifier.size(22.dp))
-        }
-        Column(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(contentAlignment = Alignment.BottomEnd) {
-                Box(
-                    Modifier.size(72.dp).clip(CircleShape).background(Avatar),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(initials, color = White, fontSize = 22.sp, fontWeight = FontWeight.Medium)
-                }
-                Box(
-                    Modifier
-                        .size(26.dp)
-                        .shadow(1.dp, CircleShape)
-                        .clip(CircleShape)
-                        .background(White),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(painterResource(R.drawable.ds_pencil), contentDescription = null, tint = TextMain, modifier = Modifier.size(14.dp))
-                }
+        Box(Modifier.fillMaxWidth().padding(top = 4.dp)) {
+            Box(
+                Modifier
+                    .align(Alignment.TopStart)
+                    .size(40.dp)
+                    .shadow(2.dp, CircleShape)
+                    .clip(CircleShape)
+                    .background(White)
+                    .clickable(onClick = onBack),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(painterResource(R.drawable.ds_arrow_left), contentDescription = "Назад", tint = TextMain, modifier = Modifier.size(22.dp))
             }
-            Text(name, color = TextMain, fontSize = 18.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 10.dp))
+            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(contentAlignment = Alignment.BottomEnd) {
+                    Box(
+                        Modifier.size(72.dp).clip(CircleShape).background(Color(0xFFC13A24)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(initials, color = White, fontSize = 22.sp, fontWeight = FontWeight.Medium)
+                    }
+                    Box(
+                        Modifier
+                            .size(26.dp)
+                            .shadow(1.dp, CircleShape)
+                            .clip(CircleShape)
+                            .background(White),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(painterResource(R.drawable.ds_pencil), contentDescription = null, tint = TextMain, modifier = Modifier.size(14.dp))
+                    }
+                }
+                Text(name, color = TextMain, fontSize = 20.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 12.dp, bottom = 8.dp))
+            }
         }
         SectionLabel("Мой ChatGPT")
         Group {

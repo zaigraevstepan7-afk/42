@@ -208,6 +208,7 @@ fun WelcomeScreen(busy: Boolean, error: String?, onGoogle: () -> Unit) {
 @Composable
 fun ChatScreen(
     email: String,
+    displayName: String = "",
     model: String,
     models: List<String>,
     messages: List<UiMessage>,
@@ -324,7 +325,7 @@ fun ChatScreen(
                             )
                         }
                     }
-                    Row(Modifier.fillMaxWidth().padding(bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().padding(bottom = 18.dp), verticalAlignment = Alignment.CenterVertically) {
                         Row(
                             Modifier
                                 .height(48.dp)
@@ -341,9 +342,18 @@ fun ChatScreen(
                             Text("Чат", color = White, fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 8.dp))
                         }
                         Spacer(Modifier.weight(1f))
-                        CircleIcon(R.drawable.ds_gear, "Настройки", size = 44.dp, iconSize = 22.dp) {
-                            scope.launch { drawerState.close() }
-                            onSettings()
+                        Box(
+                            Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFFC13A24))
+                                .clickable {
+                                    scope.launch { drawerState.close() }
+                                    onSettings()
+                                },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(profileMark(displayName, email), color = White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                         }
                     }
                 }
@@ -364,12 +374,6 @@ fun ChatScreen(
                                 Text("С персонализацией", color = TextMain, fontSize = 16.sp)
                                 Icon(painterResource(R.drawable.ds_chevron), contentDescription = null, tint = TextMain, modifier = Modifier.padding(start = 4.dp).size(16.dp))
                             }
-                        }
-                    } else if (draft.isBlank()) {
-                        Column(Modifier.align(Alignment.BottomCenter).padding(start = 44.dp, end = 44.dp, bottom = bottomInset + 70.dp)) {
-                            SuggestRow(R.drawable.ds_image_spark, "Создать изображение") { draft = "Создать изображение " }
-                            SuggestRow(R.drawable.ds_pencil, "Напиши или отредактируй") { draft = "Напиши или отредактируй " }
-                            SuggestRow(R.drawable.ds_globe2, "Искать в интернете") { draft = "Искать в интернете " }
                         }
                     }
                 } else {
@@ -409,25 +413,11 @@ fun ChatScreen(
                     .padding(horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                CircleIcon(R.drawable.ds_sidebar, "Меню") { scope.launch { drawerState.open() } }
+                CircleIcon(R.drawable.ds_sidebar, "Меню", size = 44.dp) { scope.launch { drawerState.open() } }
+                Spacer(Modifier.weight(1f))
                 if (messages.isEmpty()) {
-                    Spacer(Modifier.width(8.dp))
-                    Row(
-                        Modifier
-                            .height(40.dp)
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(BlueSoft)
-                            .clickable { connect = true }
-                            .padding(horizontal = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(painterResource(R.drawable.ds_sparkle_filled), contentDescription = null, tint = Blue, modifier = Modifier.size(16.dp))
-                        Text("Подключить", color = Blue, fontSize = 15.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 6.dp))
-                    }
-                    Spacer(Modifier.weight(1f))
-                    CircleIcon(R.drawable.ds_refresh_loop, "Временный чат") { temporary = !temporary }
+                    CircleIcon(R.drawable.ds_refresh_loop, "Временный чат", size = 44.dp) { temporary = !temporary }
                 } else {
-                    Spacer(Modifier.weight(1f))
                     CircleIcon(R.drawable.ds_more, "Ещё", shadow = false) { }
                 }
             }
@@ -525,12 +515,12 @@ fun ChatScreen(
                             value = draft,
                             onValueChange = { draft = it },
                             modifier = Modifier.weight(1f),
-                            textStyle = TextStyle(color = TextMain, fontSize = 16.sp),
+                            textStyle = TextStyle(color = TextMain, fontSize = 17.sp),
                             cursorBrush = SolidColor(if (messages.isEmpty()) Blue else AccentGreen),
                             singleLine = true,
                             decorationBox = { inner ->
                                 if (draft.isEmpty()) {
-                                    Text(prompt, color = TextFaint, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(prompt, color = TextFaint, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
                                 inner()
                             },
@@ -1147,6 +1137,15 @@ private suspend fun readPending(context: Context, uri: Uri, fallback: String): P
     val bytes = resolver.openInputStream(uri)?.use { it.readBytes() } ?: return@withContext null
     if (bytes.size > 4_000_000) return@withContext PendingFile(name, mime, bytes.copyOf(4_000_000))
     PendingFile(name, mime, bytes)
+}
+
+private fun profileMark(name: String, email: String): String {
+    val parts = name.split(" ").filter { it.isNotBlank() }
+    val letters = parts.mapNotNull { word -> word.firstOrNull { it.isLetter() } }
+    if (letters.size >= 2) return "${letters[0]}${letters[1]}".uppercase()
+    val fromEmail = email.substringBefore("@").filter { it.isLetter() }.take(2)
+    if (fromEmail.length == 2) return fromEmail.uppercase()
+    return name.take(1).uppercase().ifBlank { "G" }
 }
 
 @Composable
