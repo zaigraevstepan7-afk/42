@@ -1,6 +1,12 @@
 package com.antigravity.android.ui
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,8 +23,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -146,6 +155,91 @@ fun SettingsScreen(
 }
 
 @Composable
+private fun Skeleton() {
+    val alpha = rememberInfiniteTransition(label = "shimmer").animateFloat(0.35f, 0.85f, infiniteRepeatable(tween(900), RepeatMode.Reverse), label = "a")
+    Column {
+        repeat(5) {
+            Box(Modifier.padding(vertical = 8.dp).fillMaxWidth(if (it % 2 == 0) 1f else 0.72f).height(18.dp).clip(RoundedCornerShape(8.dp)).background(Card.copy(alpha = alpha.value)))
+        }
+        Box(Modifier.padding(top = 16.dp).fillMaxWidth().height(48.dp).clip(RoundedCornerShape(24.dp)).background(Card.copy(alpha = alpha.value)))
+    }
+}
+
+@Composable
+private fun MemoryForm() {
+    Row(Modifier.fillMaxWidth().padding(bottom = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text("Память", color = TextMain, fontSize = 16.sp, modifier = Modifier.weight(1f))
+        Box(Modifier.size(width = 48.dp, height = 28.dp).clip(RoundedCornerShape(14.dp)).background(Card))
+    }
+    listOf("Ваш никнейм", "Ваша профессия", "Подробнее о вас").forEach { hint ->
+        var value by rememberSaveable(hint) { mutableStateOf("") }
+        BasicTextField(
+            value = value,
+            onValueChange = { value = it },
+            textStyle = TextStyle(color = TextMain, fontSize = 16.sp),
+            cursorBrush = SolidColor(Blue),
+            modifier = Modifier.padding(bottom = 10.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(White).padding(16.dp),
+            decorationBox = { inner ->
+                if (value.isEmpty()) Text(hint, color = TextFaint, fontSize = 16.sp)
+                inner()
+            },
+        )
+    }
+}
+
+@Composable
+private fun PluginsPage() {
+    CircularProgressIndicator(color = TextMain, strokeWidth = 2.dp, modifier = Modifier.padding(vertical = 24.dp).size(28.dp))
+    Row(
+        Modifier.clip(RoundedCornerShape(24.dp)).background(Card).padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(painterResource(R.drawable.ds_grid), contentDescription = null, tint = TextMain, modifier = Modifier.size(18.dp))
+        Text("Просмотреть плагины", color = TextMain, fontSize = 16.sp, modifier = Modifier.padding(start = 8.dp))
+    }
+}
+
+@Composable
+private fun PlusPage() {
+    Text("ChatGPT Plus", color = TextMain, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+    Text("Больше сообщений и возможностей", color = TextDim, fontSize = 16.sp, modifier = Modifier.padding(top = 6.dp, bottom = 16.dp))
+    Row(Modifier.clip(RoundedCornerShape(20.dp)).background(Card).padding(4.dp)) {
+        Text("Go", color = TextDim, fontSize = 15.sp, modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp))
+        Text("Plus", color = TextMain, fontSize = 15.sp, fontWeight = FontWeight.Medium, modifier = Modifier.clip(RoundedCornerShape(16.dp)).background(White).padding(horizontal = 18.dp, vertical = 8.dp))
+    }
+    Spacer(Modifier.height(16.dp))
+    listOf("Доступ к GPT-5", "Расширенное рассуждение", "Больше сообщений и загрузок", "Расширенное создание изображений").forEach { feature ->
+        Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(feature, color = TextMain, fontSize = 15.sp, modifier = Modifier.weight(1f))
+            Text("—", color = TextFaint, fontSize = 16.sp, modifier = Modifier.padding(end = 18.dp))
+            Text("✓", color = Blue, fontSize = 16.sp)
+        }
+    }
+    Box(
+        Modifier.padding(top = 20.dp).fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(Black).padding(vertical = 16.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text("Перейти на план за 19,99 $", color = White, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+    }
+}
+
+@Composable
+private fun UsagePage(models: List<String>, model: String, onModel: (String) -> Unit) {
+    Text("Лимит использования", color = TextMain, fontSize = 16.sp)
+    Text("Осталось 100%", color = TextDim, fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp, bottom = 8.dp))
+    Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(Card)) {
+        Box(Modifier.fillMaxWidth().height(4.dp).background(Blue))
+    }
+    Text("Сброс в начале следующего периода", color = TextFaint, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp, bottom = 16.dp))
+    models.forEach { item ->
+        Row(Modifier.fillMaxWidth().height(48.dp).clickable { onModel(item) }, verticalAlignment = Alignment.CenterVertically) {
+            Text(item, color = TextMain, fontSize = 16.sp, modifier = Modifier.weight(1f))
+            if (item == model) Text("✓", color = Blue, fontSize = 16.sp)
+        }
+    }
+}
+
+@Composable
 private fun SectionLabel(text: String) {
     Text(text, color = TextDim, fontSize = 14.sp, modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 8.dp))
 }
@@ -179,15 +273,11 @@ private fun DetailPage(
         }
         Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp)) {
             when (title) {
-                "Использование и лимиты" -> models.forEach { item ->
-                    Row(
-                        Modifier.fillMaxWidth().height(52.dp).clip(RoundedCornerShape(12.dp)).clickable { onModel(item) },
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(item, color = TextMain, fontSize = 16.sp, modifier = Modifier.weight(1f))
-                        if (item == model) Text("✓", color = Blue, fontSize = 16.sp)
-                    }
-                }
+                "Персонализация", "Уведомления" -> Skeleton()
+                "Память" -> MemoryForm()
+                "Плагины" -> PluginsPage()
+                "Изменить план" -> PlusPage()
+                "Использование и лимиты" -> UsagePage(models, model, onModel)
                 "Внешний вид" -> Text("Система (по умолчанию)", color = TextMain, fontSize = 16.sp)
                 "Акцентный цвет" -> Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(8.dp).clip(CircleShape).background(Blue))
@@ -196,7 +286,6 @@ private fun DetailPage(
                 "Электронная почта" -> Text(email.ifBlank { "—" }, color = TextMain, fontSize = 16.sp)
                 "Голос" -> Text("Разрешите доступ к микрофону в системных настройках, чтобы использовать Голос.", color = TextDim, fontSize = 16.sp, lineHeight = 22.sp)
                 "Управление данными" -> Text("Чтобы экспортировать свои данные, откройте ChatGPT в браузере. Там вы сможете запросить и скачать свои данные.", color = TextDim, fontSize = 16.sp, lineHeight = 22.sp)
-                "Выйти" -> Text("Выйти", color = Logout, fontSize = 16.sp, modifier = Modifier.clickable(onClick = onLogout))
                 else -> Text(title, color = TextDim, fontSize = 16.sp)
             }
         }

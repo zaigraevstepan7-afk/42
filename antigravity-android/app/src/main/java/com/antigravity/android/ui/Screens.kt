@@ -69,6 +69,7 @@ import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.Text
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.layout.PaddingValues
@@ -166,6 +167,7 @@ fun ChatScreen(
     models: List<String>,
     messages: List<UiMessage>,
     conversations: List<Pair<String, String>>,
+    activeId: String,
     busy: Boolean,
     onModel: (String) -> Unit,
     onNewChat: () -> Unit,
@@ -212,16 +214,22 @@ fun ChatScreen(
                     Spacer(Modifier.padding(vertical = 8.dp).fillMaxWidth().height(0.5.dp).background(Hairline))
                     LazyColumn(Modifier.weight(1f)) {
                         items(conversations) { (id, title) ->
-                            Text(
-                                title,
-                                color = TextMain,
-                                fontSize = 16.sp,
-                                maxLines = 1,
-                                modifier = Modifier.fillMaxWidth().clickable {
-                                    scope.launch { drawerState.close() }
-                                    onOpenChat(id)
-                                }.padding(vertical = 12.dp),
-                            )
+                            val active = id == activeId
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(if (active) Card else Color.Transparent)
+                                    .clickable {
+                                        scope.launch { drawerState.close() }
+                                        onOpenChat(id)
+                                    }
+                                    .padding(horizontal = 10.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(title, color = if (active) TextMain else TextDim, fontSize = 16.sp, maxLines = 1, modifier = Modifier.weight(1f))
+                                if (active) Icon(painterResource(R.drawable.ds_pencil), contentDescription = null, tint = TextDim, modifier = Modifier.size(16.dp))
+                            }
                         }
                     }
                     Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -284,10 +292,10 @@ fun ChatScreen(
                                     fontSize = 13.sp,
                                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
                                 )
-                                else -> AnswerText(
-                                    message.text,
-                                    reveal = index == messages.lastIndex,
-                                )
+                                else -> Column {
+                                    AnswerText(message.text, reveal = index == messages.lastIndex)
+                                    if (index == messages.lastIndex && !busy) ReactionRow()
+                                }
                             }
                         }
                         if (busy) {
@@ -319,7 +327,13 @@ fun ChatScreen(
                     Text("Подключить", color = Blue, fontSize = 15.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 6.dp))
                 }
                 Spacer(Modifier.weight(1f))
-                CircleIcon(R.drawable.ds_refresh, "Временный чат") { temporary = !temporary }
+                if (messages.isEmpty()) {
+                    CircleIcon(R.drawable.ds_refresh, "Временный чат") { temporary = !temporary }
+                } else {
+                    CircleIcon(R.drawable.ds_new_chat, "Новый чат", shadow = false) { onNewChat() }
+                    Spacer(Modifier.width(4.dp))
+                    CircleIcon(R.drawable.ds_more, "Ещё", shadow = false) { }
+                }
             }
             Box(
                 Modifier
@@ -341,12 +355,12 @@ fun ChatScreen(
                     .padding(start = 4.dp, end = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(
-                    painter = painterResource(R.drawable.ds_plus),
-                    contentDescription = null,
-                    tint = TextMain,
-                    modifier = Modifier.padding(10.dp).size(22.dp),
-                )
+                Box(
+                    Modifier.padding(start = 4.dp).size(36.dp).clip(CircleShape).background(PlusGray),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(painterResource(R.drawable.ds_plus), contentDescription = null, tint = TextMain, modifier = Modifier.size(20.dp))
+                }
                 BasicTextField(
                     value = draft,
                     onValueChange = { draft = it },
@@ -373,7 +387,7 @@ fun ChatScreen(
                                 modifier = Modifier.padding(horizontal = 6.dp).size(22.dp),
                             )
                             Box(
-                                Modifier.padding(end = 4.dp).size(36.dp).clip(CircleShape).background(Blue),
+                                Modifier.padding(end = 4.dp).height(36.dp).width(52.dp).clip(RoundedCornerShape(18.dp)).background(Blue),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Icon(painterResource(R.drawable.ds_voice), contentDescription = null, tint = White, modifier = Modifier.size(18.dp))
@@ -465,24 +479,23 @@ private fun AnswerText(text: String, reveal: Boolean) {
 @Composable
 private fun ThinkingDots() {
     val transition = rememberInfiniteTransition(label = "thinking")
-    Row(Modifier.padding(horizontal = 20.dp, vertical = 14.dp)) {
-        repeat(3) { index ->
-            val alpha by transition.animateFloat(
-                initialValue = 0.25f,
-                targetValue = 1f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(durationMillis = 520, delayMillis = index * 140),
-                    repeatMode = RepeatMode.Reverse,
-                ),
-                label = "dot-$index",
-            )
-            Box(
-                Modifier
-                    .padding(end = 5.dp)
-                    .size(7.dp)
-                    .clip(CircleShape)
-                    .background(White.copy(alpha = alpha)),
-            )
+    val scale by transition.animateFloat(
+        initialValue = 0.72f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(700), RepeatMode.Reverse),
+        label = "pulse",
+    )
+    Box(Modifier.padding(horizontal = 22.dp, vertical = 16.dp).size(10.dp).graphicsLayer {
+        scaleX = scale
+        scaleY = scale
+    }.clip(CircleShape).background(Blue))
+}
+
+@Composable
+private fun ReactionRow() {
+    Row(Modifier.padding(start = 16.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        listOf(R.drawable.ds_like, R.drawable.ds_dislike, R.drawable.ds_speaker, R.drawable.ds_copy, R.drawable.ds_share, R.drawable.ds_more).forEach { icon ->
+            Icon(painterResource(icon), contentDescription = null, tint = TextFaint, modifier = Modifier.padding(end = 14.dp).size(18.dp))
         }
     }
 }
@@ -512,11 +525,11 @@ private fun UserBubble(text: String) {
 }
 
 @Composable
-private fun CircleIcon(icon: Int, label: String, onClick: () -> Unit) {
+private fun CircleIcon(icon: Int, label: String, shadow: Boolean = true, onClick: () -> Unit) {
     Box(
         Modifier
             .size(40.dp)
-            .shadow(2.dp, CircleShape)
+            .then(if (shadow) Modifier.shadow(2.dp, CircleShape) else Modifier)
             .clip(CircleShape)
             .background(White)
             .clickable(onClick = onClick),

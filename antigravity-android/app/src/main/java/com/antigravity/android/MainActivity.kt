@@ -142,6 +142,7 @@ class MainActivity : ComponentActivity() {
                     models = MODELS,
                     messages = thread.messages,
                     conversations = chats.map { it.id to it.title },
+                    activeId = thread.id,
                     busy = busy,
                     onModel = { thread.model = it },
                     onNewChat = {
