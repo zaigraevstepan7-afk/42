@@ -410,25 +410,24 @@ fun ChatScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 CircleIcon(R.drawable.ds_sidebar, "Меню") { scope.launch { drawerState.open() } }
-                Spacer(Modifier.width(8.dp))
-                Row(
-                    Modifier
-                        .height(40.dp)
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(BlueSoft)
-                        .clickable { connect = true }
-                        .padding(horizontal = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(painterResource(R.drawable.ds_sparkle_filled), contentDescription = null, tint = Blue, modifier = Modifier.size(16.dp))
-                    Text("Подключить", color = Blue, fontSize = 15.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 6.dp))
-                }
-                Spacer(Modifier.weight(1f))
                 if (messages.isEmpty()) {
+                    Spacer(Modifier.width(8.dp))
+                    Row(
+                        Modifier
+                            .height(40.dp)
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(BlueSoft)
+                            .clickable { connect = true }
+                            .padding(horizontal = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(painterResource(R.drawable.ds_sparkle_filled), contentDescription = null, tint = Blue, modifier = Modifier.size(16.dp))
+                        Text("Подключить", color = Blue, fontSize = 15.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 6.dp))
+                    }
+                    Spacer(Modifier.weight(1f))
                     CircleIcon(R.drawable.ds_refresh_loop, "Временный чат") { temporary = !temporary }
                 } else {
-                    CircleIcon(R.drawable.ds_new_chat, "Новый чат", shadow = false) { onNewChat() }
-                    Spacer(Modifier.width(4.dp))
+                    Spacer(Modifier.weight(1f))
                     CircleIcon(R.drawable.ds_more, "Ещё", shadow = false) { }
                 }
             }
@@ -439,6 +438,22 @@ fun ChatScreen(
                     .height(140.dp)
                     .background(Brush.verticalGradient(listOf(Color.Transparent, Canvas))),
             )
+            if (messages.isNotEmpty() && listState.canScrollForward) {
+                Box(
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .navigationBarsPadding()
+                        .padding(bottom = 78.dp)
+                        .size(44.dp)
+                        .shadow(6.dp, CircleShape)
+                        .clip(CircleShape)
+                        .background(White)
+                        .clickable { scope.launch { listState.animateScrollToItem(messages.lastIndex) } },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(painterResource(R.drawable.ds_chevron), contentDescription = "Вниз", tint = TextMain, modifier = Modifier.size(22.dp))
+                }
+            }
             val stacked = files.isNotEmpty()
             val writing = draft.isNotBlank() || stacked
             val actionColor = if (messages.isEmpty() && !writing) Blue else AccentGreen
@@ -884,17 +899,9 @@ private fun ActionBar(
         ActionIcon(R.drawable.ds_copy, "Копировать", onClick = onCopy)
         ActionIcon(R.drawable.ds_like, "Нравится", tint = if (vote == 1) Blue else TextFaint, onClick = { vote = if (vote == 1) 0 else 1 })
         ActionIcon(R.drawable.ds_dislike, "Не нравится", tint = if (vote == -1) Blue else TextFaint, onClick = { vote = if (vote == -1) 0 else -1 })
+        ActionIcon(R.drawable.ds_speaker, "Озвучить", onClick = {})
         ActionIcon(R.drawable.ds_share, "Поделиться", onClick = onShare)
-        ActionIcon(R.drawable.ds_refresh, "Перегенерировать", onClick = onRegenerate)
-        ActionIcon(R.drawable.ds_more, "Ещё", onClick = {})
-        Spacer(Modifier.weight(1f))
-        Row(
-            Modifier.clip(RoundedCornerShape(16.dp)).clickable(onClick = onSources).padding(horizontal = 8.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(painterResource(R.drawable.ds_globe2), contentDescription = null, tint = if (hasSources) TextMain else TextFaint, modifier = Modifier.size(16.dp))
-            Text("Источники", color = if (hasSources) TextMain else TextFaint, fontSize = 13.sp, modifier = Modifier.padding(start = 6.dp))
-        }
+        ActionIcon(R.drawable.ds_more, "Ещё", onClick = { if (hasSources) onSources() else onRegenerate() })
     }
 }
 
