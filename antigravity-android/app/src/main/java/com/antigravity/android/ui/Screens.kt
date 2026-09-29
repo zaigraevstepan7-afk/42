@@ -1,10 +1,17 @@
 package com.antigravity.android.ui
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -41,6 +48,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -263,14 +271,7 @@ fun ChatScreen(
                             }
                         }
                         if (busy) {
-                            item {
-                                Text(
-                                    "…",
-                                    color = TextDim,
-                                    fontSize = 16.sp,
-                                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-                                )
-                            }
+                            item { ThinkingDots() }
                         }
                     }
                 }
@@ -424,34 +425,72 @@ fun ChatScreen(
 
 @Composable
 private fun AnswerText(text: String, reveal: Boolean) {
-    var shown by remember(text) { mutableStateOf(false) }
-    LaunchedEffect(text) { shown = true }
-    val radius by animateDpAsState(if (shown) 0.dp else 12.dp, tween(280), label = "answer-blur")
+    var count by remember(text) { mutableIntStateOf(if (reveal) 0 else text.length) }
+    LaunchedEffect(text, reveal) {
+        if (!reveal) {
+            count = text.length
+            return@LaunchedEffect
+        }
+        while (count < text.length) {
+            count = minOf(text.length, count + 2)
+            kotlinx.coroutines.delay(16)
+        }
+    }
     Text(
-        text,
+        text.take(count),
         color = TextMain,
         fontSize = 16.sp,
         lineHeight = 24.sp,
-        modifier = Modifier
-            .padding(horizontal = 20.dp, vertical = 8.dp)
-            .then(if (reveal && radius > 0.5.dp) Modifier.blur(radius) else Modifier),
+        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
     )
 }
 
 @Composable
+private fun ThinkingDots() {
+    val transition = rememberInfiniteTransition(label = "thinking")
+    Row(Modifier.padding(horizontal = 20.dp, vertical = 14.dp)) {
+        repeat(3) { index ->
+            val alpha by transition.animateFloat(
+                initialValue = 0.25f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 520, delayMillis = index * 140),
+                    repeatMode = RepeatMode.Reverse,
+                ),
+                label = "dot-$index",
+            )
+            Box(
+                Modifier
+                    .padding(end = 5.dp)
+                    .size(7.dp)
+                    .clip(CircleShape)
+                    .background(White.copy(alpha = alpha)),
+            )
+        }
+    }
+}
+
+@Composable
 private fun UserBubble(text: String) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), horizontalArrangement = Arrangement.End) {
-        Text(
-            text,
-            color = White,
-            fontSize = 16.sp,
-            lineHeight = 22.sp,
-            modifier = Modifier
-                .widthIn(max = 300.dp)
-                .clip(RoundedCornerShape(24.dp))
-                .background(Bubble)
-                .padding(horizontal = 16.dp, vertical = 10.dp),
-        )
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { visible = true }
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(tween(180)) + slideInVertically(tween(220)) { it / 2 } + scaleIn(tween(220), initialScale = 0.96f),
+    ) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), horizontalArrangement = Arrangement.End) {
+            Text(
+                text,
+                color = White,
+                fontSize = 16.sp,
+                lineHeight = 22.sp,
+                modifier = Modifier
+                    .widthIn(max = 300.dp)
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(Bubble)
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+            )
+        }
     }
 }
 
