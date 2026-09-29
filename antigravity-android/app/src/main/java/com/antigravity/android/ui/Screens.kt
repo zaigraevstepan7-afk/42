@@ -99,6 +99,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
@@ -123,6 +125,8 @@ data class PendingFile(val name: String, val mime: String, val bytes: ByteArray)
 
 enum class ReplyPhase { Waiting, Searching, Streaming, Done }
 
+data class ThinkStep(val kind: String, val text: String)
+
 data class UiMessage(
     val role: String,
     val text: String,
@@ -131,6 +135,7 @@ data class UiMessage(
     val phase: ReplyPhase = ReplyPhase.Done,
     val searchLabel: String? = null,
     val searchSteps: List<String> = emptyList(),
+    val steps: List<ThinkStep> = emptyList(),
     val thinking: Boolean = false,
     val thought: String = "",
     val thoughtSeconds: Int = 0,
@@ -234,6 +239,8 @@ fun ChatScreen(
     onSettings: () -> Unit,
 ) {
     val context = LocalContext.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     var draft by remember { mutableStateOf("") }
@@ -428,7 +435,11 @@ fun ChatScreen(
                     .padding(horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                CircleIcon(R.drawable.ds_sidebar, "Меню", size = 44.dp) { scope.launch { drawerState.open() } }
+                CircleIcon(R.drawable.ds_sidebar, "Меню", size = 44.dp) {
+                    focusManager.clearFocus(force = true)
+                    keyboard?.hide()
+                    scope.launch { drawerState.open() }
+                }
                 if (messages.isEmpty()) {
                     Spacer(Modifier.width(8.dp))
                     Row(
@@ -723,11 +734,8 @@ private fun AssistantTurn(
     onSources: () -> Unit,
 ) {
     val live = message.phase != ReplyPhase.Done
-    val searching = message.text.isEmpty() && message.searchSteps.isNotEmpty()
     Column(Modifier.fillMaxWidth().animateContentSize(tween(180))) {
-        if (searching) {
-            SearchRows(message.searchSteps)
-        } else if (live || message.thought.isNotBlank() || message.thoughtSeconds > 0) {
+        if (live || message.steps.isNotEmpty() || message.thought.isNotBlank() || message.thoughtSeconds > 0) {
             ThinkingBlock(message)
         }
         if (message.text.isNotEmpty()) {
@@ -759,33 +767,43 @@ private fun SearchRows(lines: List<String>) {
 
 @Composable
 private fun ThinkingBlock(message: UiMessage) {
-    val active = message.phase != ReplyPhase.Done && message.text.isEmpty()
-    var open by remember(message.id) { mutableStateOf(true) }
+    val live = message.phase != ReplyPhase.Done && message.text.isEmpty()
+    var open by remember(message.id) { mutableStateOf(false) }
+    val searching = message.steps.lastOrNull()?.kind == "search"
     val title = when {
-        active -> "Размышление"
+        live && searching -> "Ищет информацию"
+        live -> "Размышление"
         message.thoughtSeconds > 0 -> "Думал ${message.thoughtSeconds} с"
-        else -> "Мысли"
+        else -> "Размышление"
     }
     Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp).animateContentSize(tween(200))) {
         Row(
-            Modifier.clickable { if (message.thought.isNotBlank()) open = !open },
+            Modifier.clickable { open = !open },
             verticalAlignment = Alignment.CenterVertically,
         ) {
             ThinkingOrb()
-            if (active) {
-                ShimmerLabel(title, Modifier.padding(start = 8.dp))
-            } else {
-                Text(title, color = TextDim, fontSize = 15.sp, modifier = Modifier.padding(start = 8.dp))
-            }
+            if (live) ShimmerLabel(title, Modifier.padding(start = 8.dp))
+            else Text(title, color = TextDim, fontSize = 15.sp, modifier = Modifier.padding(start = 8.dp))
         }
-        AnimatedVisibility(visible = open && message.thought.isNotBlank(), enter = fadeIn(tween(220)) + slideInVertically { -it / 4 }, exit = fadeOut(tween(160))) {
-            Text(
-                message.thought,
-                color = TextDim,
-                fontSize = 14.sp,
-                lineHeight = 20.sp,
-                modifier = Modifier.padding(start = 30.dp, top = 8.dp, end = 8.dp),
-            )
+        AnimatedVisibility(visible = open, enter = fadeIn(tween(220)), exit = fadeOut(tween(160))) {
+            Column(Modifier.padding(start = 30.dp, top = 8.dp, end = 8.dp)) {
+                val steps = message.steps.ifEmpty {
+                    listOfNotNull(message.thought.takeIf { it.isNotBlank() }?.let { ThinkStep("thought", it) })
+                }
+                if (steps.isEmpty()) {
+                    Text(if (searching) "Ищет информацию" else "Думает", color = TextDim, fontSize = 14.sp)
+                }
+                steps.forEach { step ->
+                    if (step.kind == "search") {
+                        Row(Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.Top) {
+                            Icon(painterResource(R.drawable.ds_globe2), contentDescription = null, tint = TextDim, modifier = Modifier.padding(top = 2.dp).size(16.dp))
+                            Text(step.text, color = TextDim, fontSize = 14.sp, lineHeight = 20.sp, modifier = Modifier.padding(start = 8.dp))
+                        }
+                    } else {
+                        Text(step.text, color = TextDim, fontSize = 14.sp, lineHeight = 20.sp, modifier = Modifier.padding(vertical = 4.dp))
+                    }
+                }
+            }
         }
     }
 }

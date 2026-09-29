@@ -38,6 +38,7 @@ import com.antigravity.android.ui.PendingFile
 import com.antigravity.android.ui.ReplyPhase
 import com.antigravity.android.ui.SettingsScreen
 import com.antigravity.android.ui.TextMain
+import com.antigravity.android.ui.ThinkStep
 import com.antigravity.android.ui.UiMessage
 import com.antigravity.android.ui.WelcomeScreen
 import com.topjohnwu.superuser.Shell
@@ -306,18 +307,10 @@ class MainActivity : ComponentActivity() {
                     val (fresh, parts) = cloud.stream(live, thread.model, JSONObject().put("request", inner), halt) { delta ->
                         onMain {
                             if (delta.searchQueries.isNotEmpty()) {
-                                patchAssistant(thread) {
-                                    it.copy(
-                                        searchSteps = searchSteps(delta.searchQueries),
-                                        phase = if (shownText.get()) it.phase else ReplyPhase.Searching,
-                                        thinking = false,
-                                    )
-                                }
+                                patchAssistant(thread) { noteSearch(it, delta.searchQueries) }
                             }
                             if (!delta.thought.isNullOrBlank()) {
-                                patchAssistant(thread) {
-                                    it.copy(thought = delta.thought.orEmpty(), thinking = !shownText.get())
-                                }
+                                patchAssistant(thread) { noteThought(it, delta.thought.orEmpty(), !shownText.get()) }
                             }
                             val incoming = delta.text
                             if (!incoming.isNullOrBlank()) {
@@ -332,7 +325,6 @@ class MainActivity : ComponentActivity() {
                                             thinking = false,
                                             citations = foundCitations.get(),
                                             searchLabel = null,
-                                            searchSteps = emptyList(),
                                         )
                                     }
                                 }
@@ -356,13 +348,7 @@ class MainActivity : ComponentActivity() {
                         val query = call.callArgs?.optString("query").orEmpty()
                         if (localName == "web_search" && query.isNotBlank()) {
                             onMain {
-                                patchAssistant(thread) {
-                                    it.copy(
-                                        phase = ReplyPhase.Searching,
-                                        thinking = false,
-                                        searchSteps = searchSteps(listOf(query)),
-                                    )
-                                }
+                                patchAssistant(thread) { noteSearch(it, listOf(query)) }
                             }
                         }
                         val output = DeviceTools.run(localName, call.callArgs ?: JSONObject())
@@ -484,6 +470,37 @@ private fun rewindAfterUser(thread: ChatThread) {
         val tool = first?.has("functionResponse") == true
         if (role == "model" || tool) thread.contents.remove(thread.contents.length() - 1) else break
     }
+}
+
+private fun noteThought(message: UiMessage, full: String, stillThinking: Boolean): UiMessage {
+    if (full.isBlank()) return message
+    val previous = message.thought
+    if (full == previous) return message.copy(thinking = stillThinking)
+    val addition = if (full.startsWith(previous)) full.removePrefix(previous).trim() else full.trim()
+    val steps = message.steps.toMutableList()
+    val last = steps.lastOrNull()
+    if (addition.isNotBlank()) {
+        if (last != null && last.kind == "thought") {
+            steps[steps.lastIndex] = last.copy(text = (last.text.trimEnd() + " " + addition).trim())
+        } else {
+            steps += ThinkStep("thought", addition)
+        }
+    }
+    return message.copy(thought = full, steps = steps, thinking = stillThinking)
+}
+
+private fun noteSearch(message: UiMessage, queries: List<String>): UiMessage {
+    val steps = message.steps.toMutableList()
+    queries.map { it.trim() }.filter { it.isNotEmpty() }.distinct().forEach { query ->
+        val line = "Ищет информацию: «$query»"
+        if (steps.none { it.kind == "search" && it.text == line }) steps += ThinkStep("search", line)
+    }
+    return message.copy(
+        steps = steps,
+        searchSteps = searchSteps(queries),
+        phase = if (message.text.isNotEmpty()) message.phase else ReplyPhase.Searching,
+        thinking = false,
+    )
 }
 
 private fun searchSteps(queries: List<String>): List<String> {
