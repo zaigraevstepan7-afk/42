@@ -23,6 +23,7 @@ data class ModelPart(
     val callName: String? = null,
     val callArgs: JSONObject? = null,
     val callId: String? = null,
+    val thoughtSignature: String? = null,
 )
 
 data class Citation(
@@ -192,7 +193,14 @@ private class StreamAccumulator {
             when {
                 !part.callName.isNullOrBlank() -> {
                     val key = "${part.callName}:${part.callArgs}"
-                    if (seenCalls.add(key)) calls += part
+                    val existing = calls.indexOfFirst { "${it.callName}:${it.callArgs}" == key }
+                    if (existing >= 0) {
+                        if (calls[existing].thoughtSignature.isNullOrBlank() && !part.thoughtSignature.isNullOrBlank()) {
+                            calls[existing] = calls[existing].copy(thoughtSignature = part.thoughtSignature)
+                        }
+                    } else if (seenCalls.add(key)) {
+                        calls += part
+                    }
                 }
                 part.thought -> merge(thoughtBuf, part.text.orEmpty())
                 !part.text.isNullOrBlank() -> merge(visibleBuf, part.text.orEmpty())
@@ -246,6 +254,16 @@ private fun consumeSse(source: BufferedSource, cancelled: AtomicBoolean, onJson:
     if (event.isNotEmpty()) flush()
 }
 
+fun thoughtSignature(part: JSONObject, call: JSONObject?): String? {
+    for (node in listOfNotNull(part, call)) {
+        val camel = node.optString("thoughtSignature")
+        if (camel.isNotBlank()) return camel
+        val snake = node.optString("thought_signature")
+        if (snake.isNotBlank()) return snake
+    }
+    return null
+}
+
 fun parseParts(raw: String): List<ModelPart> {
     val root = runCatching { JSONObject(raw.ifBlank { "{}" }) }.getOrDefault(JSONObject())
     val response = root.optJSONObject("response") ?: root
@@ -261,14 +279,16 @@ fun parseParts(raw: String): List<ModelPart> {
     for (i in 0 until parts.length()) {
         val part = parts.optJSONObject(i) ?: continue
         val call = part.optJSONObject("functionCall")
+        val signature = thoughtSignature(part, call)
         if (call != null) {
             out += ModelPart(
                 callName = call.optString("name"),
                 callArgs = call.optJSONObject("args") ?: JSONObject(),
                 callId = call.optString("id").ifBlank { null },
+                thoughtSignature = signature,
             )
         } else if (part.has("text")) {
-            out += ModelPart(text = part.optString("text"), thought = part.optBoolean("thought"))
+            out += ModelPart(text = part.optString("text"), thought = part.optBoolean("thought"), thoughtSignature = signature)
         }
     }
     return out

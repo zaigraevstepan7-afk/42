@@ -341,12 +341,20 @@ class MainActivity : ComponentActivity() {
                     }
                     live = fresh
                     val calls = parts.filter { !it.callName.isNullOrBlank() }
-                    thread.contents.put(modelContent(parts))
                     if (calls.isEmpty()) break
+                    val replay = modelContent(parts)
+                    val replayParts = replay.getJSONArray("parts")
+                    val unsigned = (0 until replayParts.length()).any { index ->
+                        val item = replayParts.optJSONObject(index)
+                        item != null && item.has("functionCall") && item.optString("thoughtSignature").isBlank()
+                    }
+                    val notes = StringBuilder()
                     val responses = JSONArray()
                     calls.forEach { call ->
+                        val rawName = call.callName.orEmpty()
+                        val localName = rawName.substringAfterLast(':')
                         val query = call.callArgs?.optString("query").orEmpty()
-                        if (call.callName == "web_search" && query.isNotBlank()) {
+                        if (localName == "web_search" && query.isNotBlank()) {
                             onMain {
                                 patchAssistant(thread) {
                                     it.copy(
@@ -357,21 +365,30 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
-                        val output = DeviceTools.run(call.callName.orEmpty(), call.callArgs ?: JSONObject())
+                        val output = DeviceTools.run(localName, call.callArgs ?: JSONObject())
                         if (output.citations.isNotEmpty()) {
                             val merged = (foundCitations.get() + output.citations).distinctBy { it.url }
                             foundCitations.set(merged)
                         }
-                        responses.put(
-                            JSONObject().put(
-                                "functionResponse",
-                                JSONObject()
-                                    .put("name", call.callName)
-                                    .put("response", JSONObject().put("output", output.text)),
-                            ),
-                        )
+                        if (unsigned) {
+                            if (notes.isNotEmpty()) notes.append("\n\n")
+                            notes.append(output.text)
+                        } else {
+                            val response = JSONObject().put("name", rawName).put("response", JSONObject().put("output", output.text))
+                            if (!call.callId.isNullOrBlank()) response.put("id", call.callId)
+                            responses.put(JSONObject().put("functionResponse", response))
+                        }
                     }
-                    thread.contents.put(JSONObject().put("role", "user").put("parts", responses))
+                    if (unsigned) {
+                        thread.contents.put(
+                            JSONObject()
+                                .put("role", "user")
+                                .put("parts", JSONArray().put(JSONObject().put("text", "Результат инструмента:\n$notes"))),
+                        )
+                    } else {
+                        thread.contents.put(replay)
+                        thread.contents.put(JSONObject().put("role", "user").put("parts", responses))
+                    }
                 }
             }
             streaming.set(false)
@@ -539,17 +556,21 @@ private fun shrinkImage(bytes: ByteArray, mime: String): Pair<String, ByteArray>
 
 private fun modelContent(parts: List<com.antigravity.android.net.ModelPart>): JSONObject {
     val array = JSONArray()
+    var carried = parts.firstOrNull { !it.thoughtSignature.isNullOrBlank() }?.thoughtSignature
     parts.forEach { part ->
+        if (!part.thoughtSignature.isNullOrBlank()) carried = part.thoughtSignature
+        val obj = JSONObject()
         if (!part.callName.isNullOrBlank()) {
-            array.put(
-                JSONObject().put(
-                    "functionCall",
-                    JSONObject().put("name", part.callName).put("args", part.callArgs ?: JSONObject()),
-                ),
-            )
+            val call = JSONObject().put("name", part.callName).put("args", part.callArgs ?: JSONObject())
+            if (!part.callId.isNullOrBlank()) call.put("id", part.callId)
+            obj.put("functionCall", call)
         } else if (part.text != null) {
-            array.put(JSONObject().put("text", part.text).put("thought", part.thought))
+            obj.put("text", part.text)
+            if (part.thought) obj.put("thought", true)
         }
+        val signature = part.thoughtSignature ?: if (!part.callName.isNullOrBlank()) carried else null
+        if (!signature.isNullOrBlank()) obj.put("thoughtSignature", signature)
+        if (obj.length() > 0) array.put(obj)
     }
     return JSONObject().put("role", "model").put("parts", array)
 }
