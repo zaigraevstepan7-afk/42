@@ -276,31 +276,15 @@ class MainActivity : ComponentActivity() {
         thread.messages.add(
             UiMessage("model", "", phase = ReplyPhase.Waiting, complete = false, thinking = false),
         )
-        val searchReady = AtomicBoolean(false)
+        val startedAt = System.currentTimeMillis()
+        val searchReady = AtomicBoolean(true)
         val shownText = AtomicBoolean(false)
         val streaming = AtomicBoolean(true)
         val buffered = AtomicReference("")
         val foundCitations = AtomicReference<List<Citation>>(emptyList())
         val intro = launch {
-            delay(300)
-            if (halt.get()) return@launch
-            patchUserSending(thread, false)
-            delay(260)
-            if (halt.get() || shownText.get()) return@launch
-            patchAssistant(thread) {
-                it.copy(phase = ReplyPhase.Searching, searchLabel = "Поиск в интернете...", thinking = true)
-            }
-            delay(650)
-            if (halt.get() || shownText.get()) return@launch
-            patchAssistant(thread) {
-                it.copy(
-                    phase = ReplyPhase.Searching,
-                    searchLabel = searchQueryLabel(prompt),
-                    thinking = true,
-                )
-            }
-            delay(400)
-            searchReady.set(true)
+            delay(180)
+            if (!halt.get()) patchUserSending(thread, false)
         }
         try {
             var live = start
@@ -330,13 +314,9 @@ class MainActivity : ComponentActivity() {
                                     )
                                 }
                             }
-                            if (!delta.thought.isNullOrBlank() && !shownText.get()) {
+                            if (!delta.thought.isNullOrBlank()) {
                                 patchAssistant(thread) {
-                                    it.copy(
-                                        thinking = true,
-                                        phase = if (it.phase == ReplyPhase.Waiting) ReplyPhase.Searching else it.phase,
-                                        searchLabel = it.searchLabel ?: "Поиск в интернете...",
-                                    )
+                                    it.copy(thought = delta.thought.orEmpty(), thinking = !shownText.get())
                                 }
                             }
                             val incoming = delta.text
@@ -387,13 +367,6 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                     thread.contents.put(JSONObject().put("role", "user").put("parts", responses))
-                    onMain {
-                        shownText.set(false)
-                        searchReady.set(true)
-                        patchAssistant(thread) {
-                            it.copy(phase = ReplyPhase.Searching, thinking = true, searchLabel = "Поиск в интернете...")
-                        }
-                    }
                 }
             }
             streaming.set(false)
@@ -418,6 +391,7 @@ class MainActivity : ComponentActivity() {
                         phase = ReplyPhase.Done,
                         complete = true,
                         thinking = false,
+                        thoughtSeconds = ((System.currentTimeMillis() - startedAt) / 1000L).toInt().coerceAtLeast(1),
                         citations = cites.ifEmpty { it.citations },
                     )
                 }

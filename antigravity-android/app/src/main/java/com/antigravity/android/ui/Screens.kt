@@ -30,6 +30,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -87,6 +88,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -127,6 +129,8 @@ data class UiMessage(
     val phase: ReplyPhase = ReplyPhase.Done,
     val searchLabel: String? = null,
     val thinking: Boolean = false,
+    val thought: String = "",
+    val thoughtSeconds: Int = 0,
     val citations: List<Citation> = emptyList(),
     val images: List<ByteArray> = emptyList(),
     val complete: Boolean = true,
@@ -242,6 +246,8 @@ fun ChatScreen(
     }
     var files by remember { mutableStateOf(listOf<PendingFile>()) }
     var deepThink by remember { mutableStateOf(false) }
+    var composerFocus by remember { mutableStateOf(false) }
+    var composerLines by remember { mutableIntStateOf(1) }
     var attachMenu by remember { mutableStateOf(false) }
     val takePhoto = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
         if (bitmap != null) {
@@ -452,17 +458,20 @@ fun ChatScreen(
                 messages.isNotEmpty() -> "Ответить ChatGPT"
                 else -> "Спросить ChatGPT"
             }
+            val grown = composerFocus || draft.isNotBlank() || stacked
+            val lines = if (grown) composerLines.coerceIn(if (draft.isBlank()) 2 else 1, 8) else 1
             Column(
                 Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
                     .padding(start = 44.dp, end = 44.dp, bottom = 10.dp)
                     .fillMaxWidth()
-                    .shadow(8.dp, RoundedCornerShape(28.dp), ambientColor = Color(0x22000000), spotColor = Color(0x14000000))
-                    .clip(RoundedCornerShape(28.dp))
-                    .border(1.dp, Color(0xFFE6E6E6), RoundedCornerShape(28.dp))
+                    .shadow(8.dp, RoundedCornerShape(if (grown) 24.dp else 28.dp), ambientColor = Color(0x22000000), spotColor = Color(0x14000000))
+                    .clip(RoundedCornerShape(if (grown) 24.dp else 28.dp))
+                    .border(1.dp, Color(0xFFE6E6E6), RoundedCornerShape(if (grown) 24.dp else 28.dp))
                     .background(Composer)
-                    .padding(top = if (stacked) 10.dp else 0.dp),
+                    .animateContentSize(tween(220, easing = FastOutSlowInEasing))
+                    .padding(top = if (stacked || grown) 8.dp else 0.dp),
             ) {
                 if (stacked) {
                     Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 8.dp)) {
@@ -488,52 +497,42 @@ fun ChatScreen(
                             }
                         }
                     }
-                    BasicTextField(
-                        value = draft,
-                        onValueChange = { draft = it },
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 36.dp, max = 140.dp).padding(horizontal = 16.dp, vertical = 4.dp),
-                        textStyle = TextStyle(color = TextMain, fontSize = 16.sp, lineHeight = 22.sp),
-                        cursorBrush = SolidColor(AccentGreen),
-                        maxLines = 6,
-                        decorationBox = { inner ->
-                            if (draft.isEmpty()) {
-                                Text(prompt, color = TextFaint, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            }
-                            inner()
-                        },
-                    )
                 }
-                Row(Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    Modifier.fillMaxWidth().heightIn(min = if (grown) (lines * 24 + 28).dp else 48.dp),
+                    verticalAlignment = Alignment.Bottom,
+                ) {
                     Icon(
                         painterResource(R.drawable.ds_plus),
                         contentDescription = "Добавить",
                         tint = TextMain,
-                        modifier = Modifier.padding(horizontal = 10.dp).size(22.dp).clickable { attachMenu = !attachMenu },
+                        modifier = Modifier.padding(start = 10.dp, end = 6.dp, bottom = 13.dp).size(22.dp).clickable { attachMenu = !attachMenu },
                     )
-                    if (!stacked) {
-                        BasicTextField(
-                            value = draft,
-                            onValueChange = { draft = it },
-                            modifier = Modifier.weight(1f),
-                            textStyle = TextStyle(color = TextMain, fontSize = 17.sp),
-                            cursorBrush = SolidColor(if (messages.isEmpty()) Blue else AccentGreen),
-                            singleLine = true,
-                            decorationBox = { inner ->
-                                if (draft.isEmpty()) {
-                                    Text(prompt, color = TextFaint, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                }
-                                inner()
-                            },
-                        )
-                    } else {
-                        Spacer(Modifier.weight(1f))
-                    }
+                    BasicTextField(
+                        value = draft,
+                        onValueChange = { draft = it },
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(bottom = 12.dp, top = if (grown) 6.dp else 0.dp)
+                            .heightIn(min = (lines * 22).dp, max = 176.dp)
+                            .onFocusChanged { composerFocus = it.isFocused },
+                        textStyle = TextStyle(color = TextMain, fontSize = 17.sp, lineHeight = 22.sp),
+                        cursorBrush = SolidColor(AccentGreen),
+                        maxLines = 8,
+                        onTextLayout = { composerLines = it.lineCount.coerceAtLeast(1) },
+                        decorationBox = { inner ->
+                            if (draft.isEmpty()) {
+                                Text(prompt, color = TextFaint, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                            inner()
+                        },
+                    )
                     if (!busy) {
                         Icon(
                             painterResource(R.drawable.ds_mic),
                             contentDescription = "Голос в текст",
                             tint = TextMain,
-                            modifier = Modifier.padding(end = 8.dp).size(22.dp).clickable { dictate() },
+                            modifier = Modifier.padding(end = 8.dp, bottom = 13.dp).size(22.dp).clickable { dictate() },
                         )
                     }
                     AnimatedContent(
@@ -547,7 +546,7 @@ fun ChatScreen(
                     ) { slot ->
                         Box(
                             Modifier
-                                .padding(end = 8.dp)
+                                .padding(end = 8.dp, bottom = 8.dp)
                                 .size(32.dp)
                                 .clip(CircleShape)
                                 .background(actionColor)
@@ -699,16 +698,13 @@ private fun AssistantTurn(
     onRegenerate: () -> Unit,
     onSources: () -> Unit,
 ) {
-    val showSearch = message.phase == ReplyPhase.Searching || (message.phase == ReplyPhase.Streaming && message.text.isEmpty())
-    Column(Modifier.fillMaxWidth()) {
-        AnimatedVisibility(visible = message.phase == ReplyPhase.Waiting && message.text.isEmpty(), enter = fadeIn(tween(160)), exit = fadeOut(tween(180))) {
-            ThinkingDots()
+    val live = message.phase != ReplyPhase.Done
+    Column(Modifier.fillMaxWidth().animateContentSize(tween(180))) {
+        if (live || message.thought.isNotBlank() || message.thoughtSeconds > 0) {
+            ThinkingBlock(message)
         }
-        AnimatedVisibility(visible = showSearch, enter = fadeIn(tween(220)), exit = fadeOut(tween(260))) {
-            Column {
-                SearchStatus(message.searchLabel ?: "Поиск в интернете...")
-                if (message.thinking) ThinkingShimmer()
-            }
+        AnimatedVisibility(visible = live && !message.searchLabel.isNullOrBlank(), enter = fadeIn(tween(220)), exit = fadeOut(tween(220))) {
+            SearchStatus(message.searchLabel.orEmpty())
         }
         if (message.text.isNotEmpty()) {
             AnswerMarkdown(message.text, message.citations, streaming = message.phase == ReplyPhase.Streaming)
@@ -739,21 +735,53 @@ private fun SearchStatus(label: String) {
 }
 
 @Composable
-private fun ThinkingShimmer() {
-    val transition = rememberInfiniteTransition(label = "shimmer")
-    val shift by transition.animateFloat(
+private fun ThinkingBlock(message: UiMessage) {
+    val active = message.phase != ReplyPhase.Done && message.text.isEmpty()
+    var open by remember(message.id) { mutableStateOf(true) }
+    val title = when {
+        active -> "Размышление"
+        message.thoughtSeconds > 0 -> "Думал ${message.thoughtSeconds} с"
+        else -> "Мысли"
+    }
+    Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp).animateContentSize(tween(200))) {
+        Row(
+            Modifier.clickable { if (message.thought.isNotBlank()) open = !open },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ThinkingOrb()
+            if (active) {
+                ShimmerLabel(title, Modifier.padding(start = 8.dp))
+            } else {
+                Text(title, color = TextDim, fontSize = 15.sp, modifier = Modifier.padding(start = 8.dp))
+            }
+        }
+        AnimatedVisibility(visible = open && message.thought.isNotBlank(), enter = fadeIn(tween(220)) + slideInVertically { -it / 4 }, exit = fadeOut(tween(160))) {
+            Text(
+                message.thought,
+                color = TextDim,
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
+                modifier = Modifier.padding(start = 30.dp, top = 8.dp, end = 8.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ShimmerLabel(text: String, modifier: Modifier = Modifier) {
+    val shift by rememberInfiniteTransition(label = "shimmer").animateFloat(
         initialValue = -160f,
         targetValue = 420f,
         animationSpec = infiniteRepeatable(tween(1300, easing = LinearEasing), RepeatMode.Restart),
         label = "shift",
     )
     Text(
-        "Обдумывание",
+        text,
         fontSize = 15.sp,
+        modifier = modifier,
         style = TextStyle(
             brush = Brush.linearGradient(
                 colors = listOf(
-                    Color(0xFFB4B4B4),
                     Color(0xFFB4B4B4),
                     Color(0xFFEDEDED),
                     Color(0xFF1A1A1A),
@@ -761,11 +789,41 @@ private fun ThinkingShimmer() {
                     Color(0xFFB4B4B4),
                 ),
                 start = Offset(shift, 0f),
-                end = Offset(shift + 170f, 0f),
+                end = Offset(shift + 160f, 0f),
             ),
         ),
-        modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
     )
+}
+
+@Composable
+private fun ThinkingOrb(size: androidx.compose.ui.unit.Dp = 22.dp) {
+    val phase by rememberInfiniteTransition(label = "orb").animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(1500, easing = LinearEasing), RepeatMode.Restart),
+        label = "phase",
+    )
+    Canvas(Modifier.size(size)) {
+        val count = 3
+        val gap = this.size.minDimension / 4.2f
+        val radius = gap * 0.36f
+        val start = androidx.compose.ui.geometry.Offset(
+            (this.size.width - gap * (count - 1)) / 2f,
+            (this.size.height - gap * (count - 1)) / 2f,
+        )
+        for (y in 0 until count) {
+            for (x in 0 until count) {
+                val dist = kotlin.math.hypot((x - 1).toFloat(), (y - 1).toFloat())
+                val wave = ((phase - dist * 0.22f) % 1f + 1f) % 1f
+                val pulse = kotlin.math.sin(wave * Math.PI).toFloat().coerceIn(0f, 1f)
+                drawCircle(
+                    color = AccentGreen.copy(alpha = 0.2f + 0.8f * pulse),
+                    radius = radius * (0.7f + 0.45f * pulse),
+                    center = start + androidx.compose.ui.geometry.Offset(x * gap, y * gap),
+                )
+            }
+        }
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
