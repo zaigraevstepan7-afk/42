@@ -334,13 +334,25 @@ class MainActivity : ComponentActivity() {
                     if (calls.isEmpty()) break
                     val responses = JSONArray()
                     calls.forEach { call ->
+                        val query = call.callArgs?.optString("query").orEmpty()
+                        if (call.callName == "web_search" && query.isNotBlank()) {
+                            onMain {
+                                patchAssistant(thread) {
+                                    it.copy(phase = ReplyPhase.Searching, thinking = true, searchLabel = searchQueryLabel(query))
+                                }
+                            }
+                        }
                         val output = DeviceTools.run(call.callName.orEmpty(), call.callArgs ?: JSONObject())
+                        if (output.citations.isNotEmpty()) {
+                            val merged = (foundCitations.get() + output.citations).distinctBy { it.url }
+                            foundCitations.set(merged)
+                        }
                         responses.put(
                             JSONObject().put(
                                 "functionResponse",
                                 JSONObject()
                                     .put("name", call.callName)
-                                    .put("response", JSONObject().put("output", output)),
+                                    .put("response", JSONObject().put("output", output.text)),
                             ),
                         )
                     }
@@ -493,8 +505,8 @@ private fun modelContent(parts: List<com.antigravity.android.net.ModelPart>): JS
 private fun systemInstruction(): JSONObject {
     val text = """
         Ты работаешь внутри телефона с root. Отвечай на языке пользователя.
-        Если вопрос про факты, новости или актуальное, опирайся на поиск в интернете.
-        Для фактов добавляй короткие ссылки на источники в тексте, где это уместно.
+        Для фактов, новостей, цен, дат и всего актуального сначала вызови web_search, затем при необходимости read_url.
+        Не выдумывай источники. В ответе упоминай названия сайтов из результатов поиска.
         Файлы, команды и загрузки делай инструментами list_dir, read_file, write_file, exec, download.
         Пути абсолютные. Не выдумывай вывод команд.
         Форматируй ответ markdown: сначала короткий абзац, затем жирный заголовок, затем абзацы.

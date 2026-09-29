@@ -245,7 +245,7 @@ fun ChatScreen(
     }
     ModalNavigationDrawer(
         drawerState = drawerState,
-        scrimColor = Color.Black.copy(alpha = 0.45f),
+        scrimColor = Color.Black.copy(alpha = 0.78f),
         drawerContent = {
             ModalDrawerSheet(
                 drawerContainerColor = Sidebar,

@@ -348,11 +348,12 @@ fun agentTools(): JSONArray {
             )
     }
     return JSONArray()
-        .put(JSONObject().put("googleSearch", JSONObject()))
         .put(
             JSONObject().put(
                 "functionDeclarations",
                 JSONArray()
+                    .put(decl("web_search", "Найти актуальные страницы в интернете", "query" to "Поисковый запрос"))
+                    .put(decl("read_url", "Прочитать текст веб-страницы", "url" to "https адрес страницы"))
                     .put(decl("list_dir", "Список файлов в каталоге", "path" to "Абсолютный путь"))
                     .put(decl("read_file", "Прочитать файл", "path" to "Абсолютный путь"))
                     .put(decl("write_file", "Записать файл целиком", "path" to "Абсолютный путь", "content" to "Новое содержимое"))
