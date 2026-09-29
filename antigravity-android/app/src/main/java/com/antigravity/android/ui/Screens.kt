@@ -29,6 +29,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
@@ -45,6 +46,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -99,6 +101,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
@@ -492,7 +495,9 @@ fun ChatScreen(
                 messages.isNotEmpty() -> "Ответить ChatGPT"
                 else -> "Спросить ChatGPT"
             }
-            val wide = composerFocus || draft.isNotBlank() || stacked
+            val density = LocalDensity.current
+            val keyboardOpen = WindowInsets.ime.getBottom(density) > 0
+            val wide = draft.isNotBlank() || stacked || (composerFocus && keyboardOpen)
             val sidePad by animateDpAsState(if (wide) 12.dp else 44.dp, tween(220, easing = FastOutSlowInEasing), label = "composer-width")
             val textMax = (LocalConfiguration.current.screenHeightDp / 3).dp - 56.dp
             val lines = if (draft.isBlank()) 1 else composerLines.coerceAtLeast(1)
@@ -553,7 +558,7 @@ fun ChatScreen(
                             .padding(bottom = if (lines > 1) 12.dp else 0.dp, top = if (lines > 1) 6.dp else 0.dp)
                             .heightIn(min = (lines * 22).dp, max = textMax)
                             .onFocusChanged { composerFocus = it.isFocused },
-                        textStyle = TextStyle(color = TextMain, fontSize = 17.sp, lineHeight = 22.sp),
+                        textStyle = TextStyle(color = TextMain, fontSize = 17.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold),
                         cursorBrush = SolidColor(AccentGreen),
                         maxLines = Int.MAX_VALUE,
                         onTextLayout = { composerLines = it.lineCount.coerceAtLeast(1) },
@@ -612,11 +617,21 @@ fun ChatScreen(
                     }
                 }
             }
-            if (attachMenu) {
+            AnimatedVisibility(
+                visible = attachMenu,
+                enter = fadeIn(tween(160)),
+                exit = fadeOut(tween(140)),
+            ) {
                 Box(Modifier.fillMaxSize().clickable { attachMenu = false })
+            }
+            AnimatedVisibility(
+                visible = attachMenu,
+                modifier = Modifier.align(Alignment.BottomStart),
+                enter = fadeIn(tween(180)) + scaleIn(tween(220), initialScale = 0.92f),
+                exit = fadeOut(tween(140)) + scaleOut(tween(160), targetScale = 0.96f),
+            ) {
                 Column(
                     Modifier
-                        .align(Alignment.BottomStart)
                         .navigationBarsPadding()
                         .padding(start = 16.dp, bottom = 74.dp)
                         .width(280.dp)
@@ -769,9 +784,10 @@ private fun SearchRows(lines: List<String>) {
 private fun ThinkingBlock(message: UiMessage) {
     val live = message.phase != ReplyPhase.Done && message.text.isEmpty()
     var open by remember(message.id) { mutableStateOf(false) }
-    val searching = message.steps.lastOrNull()?.kind == "search"
+    val last = message.steps.lastOrNull()
     val title = when {
-        live && searching -> "Ищет информацию"
+        live && last?.kind == "search" -> "Ищет информацию"
+        live && last?.kind == "tool" -> "Работает с файлами"
         live -> "Размышление"
         message.thoughtSeconds > 0 -> "Думал ${message.thoughtSeconds} с"
         else -> "Размышление"
@@ -791,12 +807,17 @@ private fun ThinkingBlock(message: UiMessage) {
                     listOfNotNull(message.thought.takeIf { it.isNotBlank() }?.let { ThinkStep("thought", it) })
                 }
                 if (steps.isEmpty()) {
-                    Text(if (searching) "Ищет информацию" else "Думает", color = TextDim, fontSize = 14.sp)
+                    Text(if (last?.kind == "tool") "Работает с файлами" else if (last?.kind == "search") "Ищет информацию" else "Думает", color = TextDim, fontSize = 14.sp)
                 }
                 steps.forEach { step ->
-                    if (step.kind == "search") {
+                    if (step.kind == "search" || step.kind == "tool") {
                         Row(Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.Top) {
-                            Icon(painterResource(R.drawable.ds_globe2), contentDescription = null, tint = TextDim, modifier = Modifier.padding(top = 2.dp).size(16.dp))
+                            Icon(
+                                painterResource(if (step.kind == "search") R.drawable.ds_globe2 else R.drawable.ds_folder),
+                                contentDescription = null,
+                                tint = TextDim,
+                                modifier = Modifier.padding(top = 2.dp).size(16.dp),
+                            )
                             Text(step.text, color = TextDim, fontSize = 14.sp, lineHeight = 20.sp, modifier = Modifier.padding(start = 8.dp))
                         }
                     } else {
@@ -887,6 +908,7 @@ private fun AnswerMarkdown(text: String, citations: List<Citation>, streaming: B
                     inlineMarkdown(block.text),
                     color = TextMain,
                     fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
                     lineHeight = 24.sp,
                     modifier = Modifier.padding(bottom = 10.dp),
                 )
@@ -1083,6 +1105,7 @@ private fun UserBubble(text: String, sending: Boolean, images: List<ByteArray>) 
                     text,
                     color = TextMain,
                     fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
                     lineHeight = 22.sp,
                     modifier = Modifier
                         .padding(top = if (images.isEmpty()) 0.dp else 6.dp)
@@ -1206,7 +1229,7 @@ private fun CircleIcon(
 private fun SideRow(icon: Int, title: String) {
     Row(Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(painterResource(icon), contentDescription = null, tint = TextMain, modifier = Modifier.size(22.dp))
-        Text(title, color = TextMain, fontSize = 16.sp, modifier = Modifier.padding(start = 15.dp))
+        Text(title, color = TextMain, fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 15.dp))
     }
 }
 
@@ -1222,7 +1245,7 @@ private fun AttachRow(icon: Int, title: String, checked: Boolean = false, onClic
         ) {
             Icon(painterResource(icon), contentDescription = null, tint = if (checked) Blue else TextMain, modifier = Modifier.size(20.dp))
         }
-        Text(title, color = TextMain, fontSize = 16.sp, modifier = Modifier.padding(start = 14.dp).weight(1f))
+        Text(title, color = TextMain, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 14.dp).weight(1f))
         if (checked) Text("✓", color = Blue, fontSize = 16.sp)
     }
 }
@@ -1254,6 +1277,6 @@ private fun SuggestRow(icon: Int, title: String, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(painterResource(icon), contentDescription = null, tint = TextDim, modifier = Modifier.size(22.dp))
-        Text(title, color = TextMain, fontSize = 16.sp, modifier = Modifier.padding(start = 14.dp))
+        Text(title, color = TextMain, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 14.dp))
     }
 }

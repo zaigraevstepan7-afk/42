@@ -8,6 +8,12 @@ import android.util.Base64
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -244,7 +250,11 @@ class MainActivity : ComponentActivity() {
                         }
                     },
                 )
-                if (settings) {
+                AnimatedVisibility(
+                    visible = settings,
+                    enter = slideInHorizontally(tween(280)) { it } + fadeIn(tween(200)),
+                    exit = slideOutHorizontally(tween(220)) { it } + fadeOut(tween(160)),
+                ) {
                     SettingsScreen(
                         email = session?.email.orEmpty(),
                         displayName = session?.displayName.orEmpty(),
@@ -347,9 +357,9 @@ class MainActivity : ComponentActivity() {
                         val localName = rawName.substringAfterLast(':')
                         val query = call.callArgs?.optString("query").orEmpty()
                         if (localName == "web_search" && query.isNotBlank()) {
-                            onMain {
-                                patchAssistant(thread) { noteSearch(it, listOf(query)) }
-                            }
+                            onMain { patchAssistant(thread) { noteSearch(it, listOf(query)) } }
+                        } else {
+                            onMain { patchAssistant(thread) { noteTool(it, localName, call.callArgs ?: JSONObject()) } }
                         }
                         val output = DeviceTools.run(localName, call.callArgs ?: JSONObject())
                         if (output.citations.isNotEmpty()) {
@@ -470,6 +480,24 @@ private fun rewindAfterUser(thread: ChatThread) {
         val tool = first?.has("functionResponse") == true
         if (role == "model" || tool) thread.contents.remove(thread.contents.length() - 1) else break
     }
+}
+
+private fun noteTool(message: UiMessage, name: String, args: JSONObject): UiMessage {
+    val line = when (name) {
+        "read_url" -> "Открывает страницу"
+        "list_dir" -> "Смотрит папку ${args.optString("path")}"
+        "read_file" -> "Читает файл ${args.optString("path").substringAfterLast('/')}"
+        "write_file" -> "Создаёт файл ${args.optString("path").substringAfterLast('/')}"
+        "exec" -> "Выполняет команду"
+        "download" -> "Скачивает файл"
+        else -> "Использует $name"
+    }
+    if (message.steps.lastOrNull()?.text == line) return message
+    return message.copy(
+        steps = message.steps + ThinkStep("tool", line),
+        phase = if (message.text.isNotEmpty()) message.phase else ReplyPhase.Searching,
+        thinking = false,
+    )
 }
 
 private fun noteThought(message: UiMessage, full: String, stillThinking: Boolean): UiMessage {
