@@ -65,6 +65,7 @@ class MainActivity : ComponentActivity() {
         loginCallback?.invoke(code, error)
     }
     private var loginCallback: ((String?, String?) -> Unit)? = null
+    private var onShare: ((PendingFile) -> Unit)? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -74,6 +75,24 @@ class MainActivity : ComponentActivity() {
         setContent { RootApp() }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        readSharedImage(intent)?.let { onShare?.invoke(it) }
+    }
+
+    private fun readSharedImage(source: Intent?): PendingFile? {
+        if (source?.action != Intent.ACTION_SEND) return null
+        @Suppress("DEPRECATION")
+        val uri = source.getParcelableExtra<android.net.Uri>(Intent.EXTRA_STREAM) ?: return null
+        val mime = contentResolver.getType(uri) ?: "image/jpeg"
+        if (!mime.startsWith("image/")) return null
+        val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return null
+        source.action = Intent.ACTION_MAIN
+        source.removeExtra(Intent.EXTRA_STREAM)
+        return PendingFile("screenshot.jpg", mime, bytes)
+    }
+
     @Composable
     private fun RootApp() {
         var phase by remember { mutableStateOf("check") }
@@ -81,6 +100,7 @@ class MainActivity : ComponentActivity() {
         var session by remember { mutableStateOf(store.read()) }
         var error by remember { mutableStateOf<String?>(null) }
         var busy by remember { mutableStateOf(false) }
+        var incoming by remember { mutableStateOf<PendingFile?>(null) }
         val chats = remember { mutableStateListOf<ChatThread>() }
         var currentId by remember { mutableStateOf<String?>(null) }
         val scope = rememberCoroutineScope()
@@ -110,6 +130,7 @@ class MainActivity : ComponentActivity() {
                 else -> "welcome"
             }
             if (phase == "chat" && chats.isEmpty()) current()
+            readSharedImage(intent)?.let { incoming = it }
             val current = session
             if (current != null && current.displayName.isBlank()) {
                 val named = withContext(Dispatchers.IO) {
@@ -144,6 +165,8 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        onShare = { incoming = it }
+
         when (phase) {
             "check" -> Box(Modifier.fillMaxSize().background(Canvas))
             "blocked" -> Box(Modifier.fillMaxSize().background(Canvas), contentAlignment = Alignment.Center) {
@@ -170,6 +193,8 @@ class MainActivity : ComponentActivity() {
                     conversations = chats.map { it.id to it.title },
                     activeId = thread.id,
                     busy = busy,
+                    incoming = incoming,
+                    onIncomingConsumed = { incoming = null },
                     onModel = { thread.model = it },
                     onNewChat = {
                         val created = ChatThread()
@@ -187,14 +212,9 @@ class MainActivity : ComponentActivity() {
                     onSend = { text, files, deep ->
                         val active = session ?: return@ChatScreen
                         if ((text.isBlank() && files.isEmpty()) || busy) return@ChatScreen
-                        val shown = buildString {
-                            append(text)
-                            files.forEach { file ->
-                                if (isNotEmpty()) append('\n')
-                                append(file.name)
-                            }
-                        }
-                        thread.messages.add(UiMessage("user", shown, sending = true))
+                        val images = files.filter { it.mime.startsWith("image/") }.map { it.bytes }
+                        val shown = text
+                        thread.messages.add(UiMessage("user", shown, sending = true, images = images))
                         if (thread.title == "Новый чат") thread.title = text.ifBlank { files.firstOrNull()?.name ?: "Вложение" }.take(42)
                         thread.contents.put(userContent(text, files, deep))
                         halt.set(false)
@@ -490,31 +510,47 @@ class ChatThread {
 
 private fun userContent(text: String, files: List<PendingFile>, deep: Boolean): JSONObject {
     val parts = JSONArray()
+    val images = files.filter { it.mime.startsWith("image/") }
+    images.forEach { file ->
+        val (mime, bytes) = shrinkImage(file.bytes, file.mime)
+        parts.put(
+            JSONObject().put(
+                "inlineData",
+                JSONObject()
+                    .put("mimeType", mime)
+                    .put("data", Base64.encodeToString(bytes, Base64.NO_WRAP)),
+            ),
+        )
+    }
     val body = buildString {
-        append(text)
+        if (images.isNotEmpty() && text.isBlank()) append("Посмотри на приложенное изображение и ответь, что на нём.")
+        else append(text)
         if (deep) {
             if (isNotEmpty()) append("\n\n")
             append("Размышляй глубже и подробнее.")
         }
     }
     if (body.isNotBlank()) parts.put(JSONObject().put("text", body))
-    files.forEach { file ->
-        if (file.mime.startsWith("image/")) {
-            parts.put(
-                JSONObject().put(
-                    "inlineData",
-                    JSONObject()
-                        .put("mimeType", file.mime)
-                        .put("data", Base64.encodeToString(file.bytes, Base64.NO_WRAP)),
-                ),
-            )
-        } else {
-            val decoded = runCatching { file.bytes.toString(Charsets.UTF_8).take(12_000) }.getOrDefault("")
-            parts.put(JSONObject().put("text", "Вложение ${file.name}:\n$decoded"))
-        }
+    files.filter { !it.mime.startsWith("image/") }.forEach { file ->
+        val decoded = runCatching { file.bytes.toString(Charsets.UTF_8).take(12_000) }.getOrDefault("")
+        parts.put(JSONObject().put("text", "Вложение ${file.name}:\n$decoded"))
     }
-    if (parts.length() == 0) parts.put(JSONObject().put("text", text))
+    if (parts.length() == 0) parts.put(JSONObject().put("text", text.ifBlank { " " }))
     return JSONObject().put("role", "user").put("parts", parts)
+}
+
+private fun shrinkImage(bytes: ByteArray, mime: String): Pair<String, ByteArray> {
+    val bitmap = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return mime to bytes
+    val maxSide = maxOf(bitmap.width, bitmap.height)
+    val scaled = if (maxSide > 1600) {
+        val ratio = 1600f / maxSide
+        android.graphics.Bitmap.createScaledBitmap(bitmap, (bitmap.width * ratio).toInt().coerceAtLeast(1), (bitmap.height * ratio).toInt().coerceAtLeast(1), true)
+    } else {
+        bitmap
+    }
+    val out = java.io.ByteArrayOutputStream()
+    scaled.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, out)
+    return "image/jpeg" to out.toByteArray()
 }
 
 private fun modelContent(parts: List<com.antigravity.android.net.ModelPart>): JSONObject {
@@ -537,6 +573,7 @@ private fun modelContent(parts: List<com.antigravity.android.net.ModelPart>): JS
 private fun systemInstruction(): JSONObject {
     val text = """
         Ты работаешь внутри телефона с root. Отвечай на языке пользователя.
+        Если во вложении есть изображение, ты его видишь. Отвечай по содержимому картинки, не пиши что не можешь смотреть скриншоты.
         Для фактов, новостей, цен, дат и всего актуального сначала вызови web_search, затем при необходимости read_url.
         Не выдумывай источники. В ответе упоминай названия сайтов из результатов поиска.
         Файлы, команды и загрузки делай инструментами list_dir, read_file, write_file, exec, download.

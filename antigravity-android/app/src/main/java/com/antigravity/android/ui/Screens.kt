@@ -1,5 +1,6 @@
 package com.antigravity.android.ui
 
+import android.graphics.BitmapFactory
 import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -86,11 +87,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
@@ -125,6 +128,7 @@ data class UiMessage(
     val searchLabel: String? = null,
     val thinking: Boolean = false,
     val citations: List<Citation> = emptyList(),
+    val images: List<ByteArray> = emptyList(),
     val complete: Boolean = true,
 )
 
@@ -213,6 +217,8 @@ fun ChatScreen(
     onModel: (String) -> Unit,
     onNewChat: () -> Unit,
     onOpenChat: (String) -> Unit,
+    incoming: PendingFile? = null,
+    onIncomingConsumed: () -> Unit = {},
     onSend: (String, List<PendingFile>, Boolean) -> Unit,
     onStop: () -> Unit,
     onRegenerate: () -> Unit,
@@ -258,6 +264,11 @@ fun ChatScreen(
             readPending(context, uri, "file")?.let { files = files + it }
         }
         attachMenu = false
+    }
+    LaunchedEffect(incoming?.name, incoming?.bytes?.size) {
+        val file = incoming ?: return@LaunchedEffect
+        files = files + file
+        onIncomingConsumed()
     }
     var sheet by remember { mutableStateOf(false) }
     var connect by remember { mutableStateOf(false) }
@@ -369,7 +380,7 @@ fun ChatScreen(
                     ) {
                         itemsIndexed(messages, key = { _, item -> item.id }) { index, message ->
                             when (message.role) {
-                                "user" -> UserBubble(message.text, message.sending)
+                                "user" -> UserBubble(message.text, message.sending, message.images)
                                 "tool" -> Text(
                                     message.text,
                                     color = TextFaint,
@@ -428,7 +439,14 @@ fun ChatScreen(
                     .height(140.dp)
                     .background(Brush.verticalGradient(listOf(Color.Transparent, Canvas))),
             )
-            val writing = draft.isNotBlank() || files.isNotEmpty()
+            val stacked = files.isNotEmpty()
+            val writing = draft.isNotBlank() || stacked
+            val actionColor = if (messages.isEmpty() && !writing) Blue else AccentGreen
+            val prompt = when {
+                temporary -> "Временный чат"
+                messages.isNotEmpty() -> "Ответить ChatGPT"
+                else -> "Спросить ChatGPT"
+            }
             Column(
                 Modifier
                     .align(Alignment.BottomCenter)
@@ -438,28 +456,47 @@ fun ChatScreen(
                     .shadow(16.dp, RoundedCornerShape(28.dp), ambientColor = Color(0x33000000), spotColor = Color(0x24000000))
                     .clip(RoundedCornerShape(28.dp))
                     .border(1.dp, Color(0xFFE6E6E6), RoundedCornerShape(28.dp))
-                    .background(Composer),
+                    .background(Composer)
+                    .padding(top = if (stacked) 10.dp else 0.dp),
             ) {
-                if (files.isNotEmpty()) {
-                    Row(
-                        Modifier.fillMaxWidth().padding(start = 12.dp, end = 8.dp, top = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        files.forEach { file ->
-                            Text(
-                                file.name,
-                                color = TextMain,
-                                fontSize = 13.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier
-                                    .padding(end = 6.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(Bubble)
-                                    .padding(horizontal = 10.dp, vertical = 6.dp),
-                            )
+                if (stacked) {
+                    Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 8.dp)) {
+                        files.forEachIndexed { index, file ->
+                            if (file.mime.startsWith("image/")) {
+                                ShotPreview(file.bytes, removable = true) {
+                                    files = files.filterIndexed { i, _ -> i != index }
+                                }
+                            } else {
+                                Text(
+                                    file.name,
+                                    color = TextMain,
+                                    fontSize = 13.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier
+                                        .padding(end = 8.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(Bubble)
+                                        .clickable { files = files.filterIndexed { i, _ -> i != index } }
+                                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                                )
+                            }
                         }
                     }
+                    BasicTextField(
+                        value = draft,
+                        onValueChange = { draft = it },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 36.dp, max = 140.dp).padding(horizontal = 16.dp, vertical = 4.dp),
+                        textStyle = TextStyle(color = TextMain, fontSize = 16.sp, lineHeight = 22.sp),
+                        cursorBrush = SolidColor(AccentGreen),
+                        maxLines = 6,
+                        decorationBox = { inner ->
+                            if (draft.isEmpty()) {
+                                Text(prompt, color = TextFaint, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                            inner()
+                        },
+                    )
                 }
                 Row(Modifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(
@@ -468,26 +505,24 @@ fun ChatScreen(
                         tint = TextMain,
                         modifier = Modifier.padding(horizontal = 10.dp).size(22.dp).clickable { attachMenu = !attachMenu },
                     )
-                    BasicTextField(
-                        value = draft,
-                        onValueChange = { draft = it },
-                        modifier = Modifier.weight(1f),
-                        textStyle = TextStyle(color = TextMain, fontSize = 16.sp),
-                        cursorBrush = SolidColor(Blue),
-                        singleLine = true,
-                        decorationBox = { inner ->
-                            if (draft.isEmpty()) {
-                                Text(
-                                    if (temporary) "Временный чат" else "Спросить ChatGPT",
-                                    color = TextFaint,
-                                    fontSize = 16.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                            inner()
-                        },
-                    )
+                    if (!stacked) {
+                        BasicTextField(
+                            value = draft,
+                            onValueChange = { draft = it },
+                            modifier = Modifier.weight(1f),
+                            textStyle = TextStyle(color = TextMain, fontSize = 16.sp),
+                            cursorBrush = SolidColor(if (messages.isEmpty()) Blue else AccentGreen),
+                            singleLine = true,
+                            decorationBox = { inner ->
+                                if (draft.isEmpty()) {
+                                    Text(prompt, color = TextFaint, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                                inner()
+                            },
+                        )
+                    } else {
+                        Spacer(Modifier.weight(1f))
+                    }
                     if (!busy) {
                         Icon(
                             painterResource(R.drawable.ds_mic),
@@ -510,7 +545,7 @@ fun ChatScreen(
                                 .padding(end = 6.dp)
                                 .size(34.dp)
                                 .clip(CircleShape)
-                                .background(Blue)
+                                .background(actionColor)
                                 .clickable {
                                     when (slot) {
                                         "stop" -> onStop()
@@ -896,7 +931,47 @@ private fun ThinkingDots() {
 }
 
 @Composable
-private fun UserBubble(text: String, sending: Boolean) {
+private fun ShotPreview(bytes: ByteArray, removable: Boolean, onRemove: () -> Unit = {}) {
+    val image = remember(bytes) { decodePreview(bytes) }
+    Box(Modifier.padding(end = 8.dp).size(width = 104.dp, height = 132.dp)) {
+        if (image != null) {
+            androidx.compose.foundation.Image(
+                bitmap = image,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp)),
+            )
+        } else {
+            Box(Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp)).background(Bubble))
+        }
+        if (removable) {
+            Box(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(6.dp)
+                    .size(22.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xCC1A1A1A))
+                    .clickable(onClick = onRemove),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("×", color = White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            }
+        }
+    }
+}
+
+private fun decodePreview(bytes: ByteArray): androidx.compose.ui.graphics.ImageBitmap? {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+    var sample = 1
+    while (bounds.outWidth / sample > 900 && sample < 16) sample *= 2
+    val opts = BitmapFactory.Options().apply { inSampleSize = sample }
+    return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)?.asImageBitmap()
+}
+
+@Composable
+private fun UserBubble(text: String, sending: Boolean, images: List<ByteArray>) {
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
     AnimatedVisibility(
@@ -904,17 +979,23 @@ private fun UserBubble(text: String, sending: Boolean) {
         enter = fadeIn(tween(180)) + slideInVertically(tween(220)) { it / 2 } + scaleIn(tween(220), initialScale = 0.96f),
     ) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalAlignment = Alignment.End) {
-            Text(
-                text,
-                color = TextMain,
-                fontSize = 16.sp,
-                lineHeight = 22.sp,
-                modifier = Modifier
-                    .widthIn(max = 300.dp)
-                    .clip(RoundedCornerShape(22.dp))
-                    .background(Bubble)
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
-            )
+            images.forEach { bytes ->
+                ShotPreview(bytes, removable = false)
+            }
+            if (text.isNotBlank()) {
+                Text(
+                    text,
+                    color = TextMain,
+                    fontSize = 16.sp,
+                    lineHeight = 22.sp,
+                    modifier = Modifier
+                        .padding(top = if (images.isEmpty()) 0.dp else 6.dp)
+                        .widthIn(max = 300.dp)
+                        .clip(RoundedCornerShape(22.dp))
+                        .background(MintBubble)
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                )
+            }
             AnimatedVisibility(visible = sending, enter = fadeIn(tween(80)), exit = fadeOut(tween(180))) {
                 Text("Отправка", color = TextFaint, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp, end = 4.dp))
             }
