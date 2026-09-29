@@ -643,28 +643,30 @@ fun ChatScreen(
                     }
                 }
             }
-            val menuScale by animateFloatAsState(if (attachMenu) 1f else 0.2f, tween(240, easing = FastOutSlowInEasing), label = "menu-scale")
-            val menuAlpha by animateFloatAsState(if (attachMenu) 1f else 0f, tween(180), label = "menu-alpha")
-            if (attachMenu || menuAlpha > 0.01f) {
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .graphicsLayer { alpha = menuAlpha }
-                        .clickable(enabled = attachMenu) { attachMenu = false },
-                )
+            AnimatedVisibility(
+                visible = attachMenu,
+                enter = fadeIn(tween(100)),
+                exit = fadeOut(tween(80)),
+            ) {
+                Box(Modifier.fillMaxSize().clickable { attachMenu = false })
+            }
+            AnimatedVisibility(
+                visible = attachMenu,
+                modifier = Modifier.align(Alignment.BottomStart).navigationBarsPadding().padding(start = sidePad + 4.dp, bottom = 64.dp),
+                enter = fadeIn(tween(140)) + scaleIn(
+                    tween(200, easing = FastOutSlowInEasing),
+                    initialScale = 0.84f,
+                    transformOrigin = TransformOrigin(0.06f, 1f),
+                ) + slideInVertically(tween(200, easing = FastOutSlowInEasing)) { it / 6 },
+                exit = fadeOut(tween(90)) + scaleOut(
+                    tween(120),
+                    targetScale = 0.92f,
+                    transformOrigin = TransformOrigin(0.06f, 1f),
+                ),
+            ) {
                 Column(
                     Modifier
-                        .align(Alignment.BottomStart)
-                        .navigationBarsPadding()
-                        .padding(start = sidePad + 6.dp, bottom = 62.dp)
                         .width(300.dp)
-                        .graphicsLayer {
-                            scaleX = menuScale
-                            scaleY = menuScale
-                            alpha = menuAlpha
-                            transformOrigin = TransformOrigin(0.08f, 1f)
-                        }
-                        .shadow(18.dp, RoundedCornerShape(28.dp))
                         .clip(RoundedCornerShape(28.dp))
                         .background(White)
                         .padding(vertical = 10.dp),
@@ -778,7 +780,7 @@ private fun AssistantTurn(
     onSources: () -> Unit,
 ) {
     val live = message.phase != ReplyPhase.Done
-    Column(Modifier.fillMaxWidth().animateContentSize(tween(180))) {
+    Column(Modifier.fillMaxWidth()) {
         if (live || message.steps.isNotEmpty() || message.thought.isNotBlank() || message.thoughtSeconds > 0) {
             ThinkingBlock(message)
         }

@@ -252,9 +252,10 @@ class MainActivity : ComponentActivity() {
                 )
                 AnimatedVisibility(
                     visible = settings,
-                    enter = slideInHorizontally(tween(280)) { it } + fadeIn(tween(200)),
-                    exit = slideOutHorizontally(tween(220)) { it } + fadeOut(tween(160)),
+                    enter = slideInHorizontally(tween(240, easing = androidx.compose.animation.core.FastOutSlowInEasing)) { it },
+                    exit = slideOutHorizontally(tween(200, easing = androidx.compose.animation.core.FastOutSlowInEasing)) { it },
                 ) {
+                    Box(Modifier.fillMaxSize().background(com.antigravity.android.ui.Page)) {
                     SettingsScreen(
                         email = session?.email.orEmpty(),
                         displayName = session?.displayName.orEmpty(),
@@ -269,6 +270,7 @@ class MainActivity : ComponentActivity() {
                             phase = "welcome"
                         },
                     )
+                    }
                 }
                 }
             }
