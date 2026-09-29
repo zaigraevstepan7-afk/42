@@ -10,6 +10,7 @@ import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
@@ -239,6 +240,9 @@ fun ChatScreen(
         if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
     }
 
+    BackHandler(enabled = drawerState.isOpen) {
+        scope.launch { drawerState.close() }
+    }
     ModalNavigationDrawer(
         drawerState = drawerState,
         scrimColor = Color.Black.copy(alpha = 0.45f),
@@ -248,10 +252,10 @@ fun ChatScreen(
                 drawerShape = RoundedCornerShape(0.dp),
                 modifier = Modifier.fillMaxWidth(0.80f),
             ) {
-                Column(Modifier.fillMaxHeight().statusBarsPadding().navigationBarsPadding().padding(horizontal = 32.dp)) {
-                    Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 22.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.fillMaxHeight().statusBarsPadding().navigationBarsPadding().padding(horizontal = 35.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 18.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text("ChatGPT", color = TextMain, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                        CircleIcon(R.drawable.ds_search, "Поиск", size = 44.dp, iconSize = 26.dp) {}
+                        CircleIcon(R.drawable.ds_search, "Поиск", size = 44.dp, iconSize = 27.dp) {}
                     }
                     SideRow(R.drawable.ds_image, "Изображения")
                     SideRow(R.drawable.ds_library, "Библиотека")
@@ -278,21 +282,21 @@ fun ChatScreen(
                             )
                         }
                     }
-                    Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().padding(bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                         Row(
                             Modifier
-                                .height(48.dp)
-                                .clip(RoundedCornerShape(24.dp))
+                                .height(51.dp)
+                                .clip(RoundedCornerShape(26.dp))
                                 .background(Blue)
                                 .clickable {
                                     scope.launch { drawerState.close() }
                                     onNewChat()
                                 }
-                                .padding(horizontal = 18.dp),
+                                .padding(horizontal = 22.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Icon(painterResource(R.drawable.ds_chat), contentDescription = null, tint = White, modifier = Modifier.size(20.dp))
-                            Text("Чат", color = White, fontSize = 17.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 8.dp))
+                            Text("Чат", color = White, fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 8.dp))
                         }
                         Spacer(Modifier.weight(1f))
                         CircleIcon(R.drawable.ds_gear, "Настройки", size = 44.dp, iconSize = 22.dp) {
@@ -496,19 +500,21 @@ fun ChatScreen(
                 }
             }
             if (expanded) {
-                ExpandedComposer(
-                    text = draft,
-                    onText = { draft = it },
-                    onClose = { expanded = false },
-                    onSend = {
-                        val text = draft.trim()
-                        if (text.isNotEmpty() && !busy) {
-                            draft = ""
-                            expanded = false
-                            onSend(text)
-                        }
-                    },
-                )
+                PredictiveBackSlide(onBack = { expanded = false }) {
+                    ExpandedComposer(
+                        text = draft,
+                        onText = { draft = it },
+                        onClose = { expanded = false },
+                        onSend = {
+                            val text = draft.trim()
+                            if (text.isNotEmpty() && !busy) {
+                                draft = ""
+                                expanded = false
+                                onSend(text)
+                            }
+                        },
+                    )
+                }
             }
         }
     }
@@ -954,9 +960,9 @@ private fun CircleIcon(
 
 @Composable
 private fun SideRow(icon: Int, title: String) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(painterResource(icon), contentDescription = null, tint = TextMain, modifier = Modifier.size(26.dp))
-        Text(title, color = TextMain, fontSize = 17.sp, modifier = Modifier.padding(start = 16.dp))
+    Row(Modifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(painterResource(icon), contentDescription = null, tint = TextMain, modifier = Modifier.size(22.dp))
+        Text(title, color = TextMain, fontSize = 16.sp, modifier = Modifier.padding(start = 15.dp))
     }
 }
 

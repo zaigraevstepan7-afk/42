@@ -55,9 +55,10 @@ fun SettingsScreen(
     onModel: (String) -> Unit = {},
 ) {
     var page by rememberSaveable { mutableStateOf<String?>(null) }
+    PredictiveBackSlide(onBack = { if (page != null) page = null else onBack() }) {
     if (page != null) {
         DetailPage(page!!, email, models, model, onModel, onLogout) { page = null }
-        return
+        return@PredictiveBackSlide
     }
     val name = displayName.ifBlank { email.substringBefore("@").ifBlank { "Google" } }
     val initials = profileInitials(displayName, email)
@@ -152,6 +153,7 @@ fun SettingsScreen(
             Text("Выйти", color = Logout, fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 14.dp))
         }
         Spacer(Modifier.height(24.dp))
+    }
     }
 }
 
