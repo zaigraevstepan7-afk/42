@@ -271,7 +271,7 @@ fun ChatScreen(
                             }
                         }
                     } else {
-                        Column(Modifier.align(Alignment.BottomCenter).padding(start = 20.dp, end = 20.dp, bottom = bottomInset + 84.dp)) {
+                        Column(Modifier.align(Alignment.BottomCenter).padding(start = 22.dp, end = 22.dp, bottom = bottomInset + 108.dp)) {
                             SuggestRow(R.drawable.ds_image_spark, "Создать изображение") { draft = "Создать изображение " }
                             SuggestRow(R.drawable.ds_pencil, "Напиши или отредактируй") { draft = "Напиши или отредактируй " }
                             SuggestRow(R.drawable.ds_globe2, "Искать в интернете") { draft = "Искать в интернете " }
@@ -317,10 +317,11 @@ fun ChatScreen(
                 Spacer(Modifier.width(8.dp))
                 Row(
                     Modifier
+                        .height(40.dp)
                         .clip(RoundedCornerShape(20.dp))
                         .background(BlueSoft)
                         .clickable { connect = true }
-                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                        .padding(horizontal = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(painterResource(R.drawable.ds_sparkle), contentDescription = null, tint = Blue, modifier = Modifier.size(16.dp))
@@ -328,7 +329,7 @@ fun ChatScreen(
                 }
                 Spacer(Modifier.weight(1f))
                 if (messages.isEmpty()) {
-                    CircleIcon(R.drawable.ds_refresh, "Временный чат") { temporary = !temporary }
+                    CircleIcon(R.drawable.ds_refresh_loop, "Временный чат") { temporary = !temporary }
                 } else {
                     CircleIcon(R.drawable.ds_new_chat, "Новый чат", shadow = false) { onNewChat() }
                     Spacer(Modifier.width(4.dp))
@@ -346,30 +347,33 @@ fun ChatScreen(
                 Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
-                    .padding(start = 12.dp, end = 12.dp, bottom = 10.dp)
+                    .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
                     .fillMaxWidth()
-                    .heightIn(min = 52.dp)
+                    .height(52.dp)
                     .clip(RoundedCornerShape(26.dp))
-                    .border(1.dp, Hairline, RoundedCornerShape(26.dp))
+                    .border(1.dp, Color(0xFFE6E6E6), RoundedCornerShape(26.dp))
                     .background(Composer)
-                    .padding(start = 4.dp, end = 6.dp),
+                    .padding(start = 6.dp, end = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Box(
-                    Modifier.padding(start = 4.dp).size(36.dp).clip(CircleShape).background(PlusGray),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(painterResource(R.drawable.ds_plus), contentDescription = null, tint = TextMain, modifier = Modifier.size(20.dp))
-                }
+                Icon(painterResource(R.drawable.ds_plus), contentDescription = null, tint = TextMain, modifier = Modifier.padding(horizontal = 8.dp).size(22.dp))
                 BasicTextField(
                     value = draft,
                     onValueChange = { draft = it },
-                    modifier = Modifier.weight(1f).padding(vertical = 14.dp),
+                    modifier = Modifier.weight(1f),
                     textStyle = TextStyle(color = TextMain, fontSize = 16.sp),
-                    cursorBrush = SolidColor(White),
-                    maxLines = 5,
+                    cursorBrush = SolidColor(Blue),
+                    singleLine = true,
                     decorationBox = { inner ->
-                        if (draft.isEmpty()) Text(if (temporary) "Временный чат" else "Спросить ChatGPT", color = TextFaint, fontSize = 16.sp)
+                        if (draft.isEmpty()) {
+                            Text(
+                                if (temporary) "Временный чат" else "Спросить ChatGPT",
+                                color = TextFaint,
+                                fontSize = 16.sp,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            )
+                        }
                         inner()
                     },
                 )
@@ -381,16 +385,16 @@ fun ChatScreen(
                     if (empty && !temporary) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
-                                painter = painterResource(R.drawable.mic_filled),
+                                painter = painterResource(R.drawable.ds_mic),
                                 contentDescription = null,
                                 tint = TextMain,
-                                modifier = Modifier.padding(horizontal = 6.dp).size(22.dp),
+                                modifier = Modifier.padding(horizontal = 8.dp).size(22.dp),
                             )
                             Box(
-                                Modifier.padding(end = 4.dp).height(36.dp).width(52.dp).clip(RoundedCornerShape(18.dp)).background(Blue),
+                                Modifier.padding(end = 2.dp).size(34.dp).clip(CircleShape).background(Blue),
                                 contentAlignment = Alignment.Center,
                             ) {
-                                Icon(painterResource(R.drawable.ds_voice), contentDescription = null, tint = White, modifier = Modifier.size(18.dp))
+                                Icon(painterResource(R.drawable.voice_button), contentDescription = null, tint = White, modifier = Modifier.size(18.dp))
                             }
                         }
                     } else {
@@ -528,7 +532,7 @@ private fun UserBubble(text: String) {
 private fun CircleIcon(icon: Int, label: String, shadow: Boolean = true, onClick: () -> Unit) {
     Box(
         Modifier
-            .size(40.dp)
+            .size(44.dp)
             .then(if (shadow) Modifier.shadow(2.dp, CircleShape) else Modifier)
             .clip(CircleShape)
             .background(White)
@@ -550,7 +554,7 @@ private fun SideRow(icon: Int, title: String) {
 @Composable
 private fun SuggestRow(icon: Int, title: String, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 10.dp),
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(painterResource(icon), contentDescription = null, tint = TextDim, modifier = Modifier.size(22.dp))
