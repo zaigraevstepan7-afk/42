@@ -2,9 +2,10 @@ package com.antigravity.android.ui
 
 import androidx.compose.ui.graphics.Color
 
-val Canvas = Color(0xFFF7F7F8)
+val Canvas = Color(0xFFFFFFFF)
+val Page = Color(0xFFF5F5F5)
 val Sidebar = Color(0xFFFFFFFF)
-val Card = Color(0xFFF0F0F0)
+val Card = Color(0xFFEEEEEE)
 val Bubble = Color(0xFFF0F0F0)
 val Composer = Color(0xFFFFFFFF)
 val TextMain = Color(0xFF0D0D0D)

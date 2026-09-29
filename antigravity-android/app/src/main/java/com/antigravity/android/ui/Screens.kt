@@ -13,6 +13,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -56,6 +57,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
@@ -318,16 +320,22 @@ fun ChatScreen(
                 Spacer(Modifier.weight(1f))
                 CircleIcon(R.drawable.ds_refresh, "Временный чат") { temporary = !temporary }
             }
+            Box(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .height(140.dp)
+                    .background(Brush.verticalGradient(listOf(Color.Transparent, Canvas))),
+            )
             Row(
                 Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
-                    .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
-                    .hazeEffect(hazeState, barBlur)
+                    .padding(start = 12.dp, end = 12.dp, bottom = 10.dp)
                     .fillMaxWidth()
                     .heightIn(min = 52.dp)
-                    .shadow(1.dp, RoundedCornerShape(26.dp))
                     .clip(RoundedCornerShape(26.dp))
+                    .border(1.dp, Hairline, RoundedCornerShape(26.dp))
                     .background(Composer)
                     .padding(start = 4.dp, end = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,

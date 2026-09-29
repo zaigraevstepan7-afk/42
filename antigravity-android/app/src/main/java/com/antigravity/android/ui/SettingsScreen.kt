@@ -38,7 +38,7 @@ fun SettingsScreen(email: String, onBack: () -> Unit, onLogout: () -> Unit) {
     Column(
         Modifier
             .fillMaxSize()
-            .background(Canvas)
+            .background(Page)
             .statusBarsPadding()
             .navigationBarsPadding()
             .verticalScroll(rememberScrollState())
@@ -94,8 +94,8 @@ fun SettingsScreen(email: String, onBack: () -> Unit, onLogout: () -> Unit) {
         }
         Spacer(Modifier.height(12.dp))
         Group {
-            SettingsRow(painterResource(R.drawable.ds_sun), "Внешний вид")
-            SettingsRow(painterResource(R.drawable.ds_palette), "Акцентный цвет", "Синий")
+            SettingsRow(painterResource(R.drawable.ds_sun), "Внешний вид", caret = true)
+            SettingsRow(painterResource(R.drawable.ds_palette), "Акцентный цвет", "Синий", caret = true)
         }
         Spacer(Modifier.height(12.dp))
         Group {
@@ -122,7 +122,7 @@ fun SettingsScreen(email: String, onBack: () -> Unit, onLogout: () -> Unit) {
                 .padding(horizontal = 16.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(painterResource(R.drawable.ds_refresh), contentDescription = null, tint = Logout, modifier = Modifier.size(22.dp))
+            Icon(painterResource(R.drawable.ds_logout), contentDescription = null, tint = Logout, modifier = Modifier.size(22.dp))
             Text("Выйти", color = Logout, fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 14.dp))
         }
         Spacer(Modifier.height(24.dp))
@@ -142,7 +142,13 @@ private fun Group(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun SettingsRow(icon: Painter, title: String, value: String? = null, tint: androidx.compose.ui.graphics.Color = TextMain) {
+private fun SettingsRow(
+    icon: Painter,
+    title: String,
+    value: String? = null,
+    tint: androidx.compose.ui.graphics.Color = TextMain,
+    caret: Boolean = false,
+) {
     Row(
         Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -150,7 +156,17 @@ private fun SettingsRow(icon: Painter, title: String, value: String? = null, tin
         Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
         Column(Modifier.weight(1f).padding(start = 14.dp)) {
             Text(title, color = tint, fontSize = 16.sp)
-            if (value != null) Text(value, color = if (title == "Акцентный цвет") Blue else TextDim, fontSize = 13.sp)
+            if (value != null && title == "Акцентный цвет") {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(8.dp).clip(CircleShape).background(Blue))
+                    Text(value, color = TextDim, fontSize = 13.sp, modifier = Modifier.padding(start = 6.dp))
+                }
+            } else if (value != null) {
+                Text(value, color = TextDim, fontSize = 13.sp)
+            }
+        }
+        if (caret) {
+            Icon(painterResource(R.drawable.ds_chevron), contentDescription = null, tint = TextDim, modifier = Modifier.size(18.dp))
         }
     }
 }
